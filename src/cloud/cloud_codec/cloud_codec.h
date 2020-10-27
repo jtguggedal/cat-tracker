@@ -14,10 +14,9 @@
 #include <zephyr.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <net/cloud.h>
-#include <modem/modem_info.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "cJSON_os.h"
 
 /**@file
  *
@@ -146,10 +145,15 @@ struct cloud_codec_data {
 	size_t len;
 };
 
-int cloud_codec_decode_response(char *input, struct cloud_data_cfg *cfg);
+static inline void cloud_codec_init(void)
+{
+	cJSON_Init();
+}
 
-int cloud_codec_encode_cfg_data(struct cloud_codec_data *output,
-				struct cloud_data_cfg *cfg_buffer);
+int cloud_codec_decode_config(char *input, struct cloud_data_cfg *cfg);
+
+int cloud_codec_encode_config(struct cloud_codec_data *output,
+			      struct cloud_data_cfg *cfg);
 
 int cloud_codec_encode_data(struct cloud_codec_data *output,
 			    struct cloud_data_gps *gps_buf,
@@ -162,23 +166,19 @@ int cloud_codec_encode_data(struct cloud_codec_data *output,
 int cloud_codec_encode_ui_data(struct cloud_codec_data *output,
 			       struct cloud_data_ui *ui_buf);
 
-int cloud_codec_encode_gps_buffer(struct cloud_codec_data *output,
-				  struct cloud_data_gps *data);
-
-int cloud_codec_encode_modem_buffer(struct cloud_codec_data *output,
-				    struct cloud_data_modem *data);
-
-int cloud_codec_encode_sensor_buffer(struct cloud_codec_data *output,
-				     struct cloud_data_sensors *data);
-
-int cloud_codec_encode_ui_buffer(struct cloud_codec_data *output,
-				 struct cloud_data_ui *data);
-
-int cloud_codec_encode_accel_buffer(struct cloud_codec_data *output,
-				    struct cloud_data_accelerometer *data);
-
-int cloud_codec_encode_bat_buffer(struct cloud_codec_data *output,
-				  struct cloud_data_battery *data);
+int cloud_codec_encode_batch_data(struct cloud_codec_data *output,
+				  struct cloud_data_gps *gps_buf,
+				  struct cloud_data_sensors *sensor_buf,
+				  struct cloud_data_modem *modem_buf,
+				  struct cloud_data_ui *ui_buf,
+				  struct cloud_data_accelerometer *accel_buf,
+				  struct cloud_data_battery *bat_buf,
+				  size_t gps_buf_count,
+				  size_t sensor_buf_count,
+				  size_t modem_buf_count,
+				  size_t ui_buf_count,
+				  size_t accel_buf_count,
+				  size_t bat_buf_count);
 
 void cloud_codec_populate_sensor_buffer(
 				struct cloud_data_sensors *sensor_buffer,
@@ -208,7 +208,7 @@ void cloud_codec_populate_modem_buffer(struct cloud_data_modem *modem_buffer,
 
 static inline void cloud_codec_release_data(struct cloud_codec_data *output)
 {
-	free(output->buf);
+	k_free(output->buf);
 }
 
 #ifdef __cplusplus

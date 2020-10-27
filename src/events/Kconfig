@@ -1,0 +1,51 @@
+#
+# Copyright (c) 2020 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+#
+
+if LOG
+
+menu "Event options"
+
+comment "Initially logged events"
+
+config APP_EVENTS_LOG
+	bool "Enable logging for application module events"
+	default y
+
+config MODEM_EVENTS_LOG
+	bool "Enable logging for modem module events"
+	default y
+
+config CLOUD_EVENTS_LOG
+	bool "Enable logging for Cloud module events"
+	default y
+
+config SENSOR_EVENTS_LOG
+	bool "Enable logging for sensor module events"
+	default y
+
+config UI_EVENTS_LOG
+	bool "Enable logging for UI module events"
+	default y
+
+config UTIL_EVENTS_LOG
+	bool "Enable logging for utility module events"
+	default y
+
+config GPS_EVENTS_LOG
+	bool "Enable logging for GPS module events"
+	default y
+
+config DATA_EVENTS_LOG
+	bool "Enable logging for data module events"
+	default y
+
+config OUTPUT_EVENTS_LOG
+	bool "Enable logging for output module events"
+	default y
+
+endmenu
+
+endif

@@ -32,3 +32,4 @@ run-clang-format.py
 .clang-format
 certificates/
 dist/
+.gdb_history

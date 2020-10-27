@@ -11,8 +11,6 @@
 #ifndef EXT_SENSORS_H__
 #define EXT_SENSORS_H__
 
-#include <cloud_codec.h>
-
 /**@file
  *
  * @defgroup External sensors ext_sensors

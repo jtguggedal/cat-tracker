@@ -14,7 +14,7 @@
  */
 
 #include "event_manager.h"
-#include "cloud_codec.h"
+#include "cloud/cloud_codec/cloud_codec.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,12 +25,10 @@ enum data_mgr_event_types {
 	DATA_MGR_EVT_DATA_SEND,
 	DATA_MGR_EVT_DATA_SEND_BATCH,
 	DATA_MGR_EVT_UI_DATA_SEND,
-	DATA_MGR_EVT_DATA_READY,
 	DATA_MGR_EVT_CONFIG_INIT,
 	DATA_MGR_EVT_CONFIG_READY,
 	DATA_MGR_EVT_CONFIG_SEND,
-	DATA_MGR_EVT_STATE_GET,
-	DATA_MGR_EVT_DATA_GET,
+	DATA_MGR_EVT_CONFIG_GET,
 	DATA_MGR_EVT_SHUTDOWN_READY,
 	DATA_MGR_EVT_ERROR
 };

@@ -8,7 +8,7 @@
 #include <event_manager.h>
 #include <settings/settings.h>
 
-#include "cloud_codec.h"
+#include "cloud/cloud_codec/cloud_codec.h"
 
 #define MODULE data_manager
 
@@ -87,7 +87,7 @@ static struct cloud_data_cfg current_cfg = {
 	.acct = DEFAULT_ACCELEROMETER_THRESHOLD
 };
 
-/* Cloud connection state state. */
+/* Cloud connection state. */
 enum connection_state {
 	STATE_DISCONNECTED,
 	STATE_CONNECTED
@@ -121,15 +121,20 @@ static int data_cnt;
  */
 static void *pending_data[10];
 
+/* Forward declarations */
+static int config_settings_handler(const char *key, size_t len,
+				   settings_read_cb read_cb, void *cb_arg);
+
+/* Static handlers */
+SETTINGS_STATIC_HANDLER_DEFINE(MODULE, DEVICE_SETTINGS_KEY, NULL,
+			       config_settings_handler, NULL, NULL);
+
 static char *state2str(enum connection_state state)
 {
-	switch(state) {
-		case STATE_DISCONNECTED:
-			return "STATE_DISCONNECTED";
-		case STATE_CONNECTED:
-			return "DATA_MGR_STATE_CONNECTED";
-		default:
-			return "Unknown";
+	switch (state) {
+	case STATE_DISCONNECTED: return "STATE_DISCONNECTED";
+	case STATE_CONNECTED: return "DATA_MGR_STATE_CONNECTED";
+	default: return "Unknown";
 	}
 }
 
@@ -221,22 +226,12 @@ static int data_manager_save_config(const void *buf, size_t buf_len)
 static int data_manager_setup(void)
 {
 	int err;
-	struct settings_handler settings_cfg = {
-		.name = DEVICE_SETTINGS_KEY,
-		.h_set = config_settings_handler
-	};
 
-	k_delayed_work_init(&data_send_work, data_send_work_fn);
+	cloud_codec_init();
 
 	err = settings_subsys_init();
 	if (err) {
 		LOG_ERR("settings_subsys_init, error: %d", err);
-		return err;
-	}
-
-	err = settings_register(&settings_cfg);
-	if (err) {
-		LOG_ERR("settings_register, error: %d", err);
 		return err;
 	}
 
@@ -291,9 +286,9 @@ static void data_send(void)
 		LOG_ERR("Error encoding message %d", err);
 		signal_error(err);
 		return;
-	} else {
-		LOG_DBG("Data encoded successfully");
 	}
+
+	LOG_DBG("Data encoded successfully");
 
 	data_mgr_event_new->data.buffer.buf = codec.buf;
 	data_mgr_event_new->data.buffer.len = codec.len;
@@ -318,14 +313,12 @@ static void data_send(void)
 					ARRAY_SIZE(ui_buf),
 					ARRAY_SIZE(accel_buf),
 					ARRAY_SIZE(bat_buf));
-	if (err) {
+	if (err == -ENODATA) {
+		LOG_WRN("No batch data to encode, ringbuffers empty");
+		return;
+	} else if (err) {
 		LOG_ERR("Error batch-enconding data: %d", err);
 		signal_error(err);
-		return;
-	}
-
-	if (codec.buf == NULL) {
-		LOG_DBG("No batch data to send");
 		return;
 	}
 
@@ -339,11 +332,8 @@ static void data_send(void)
 static void cloud_manager_config_get(void)
 {
 	struct data_mgr_event *evt = new_data_mgr_event();
-	static char *buf = "";
 
-	evt->type = DATA_MGR_EVT_DATA_SEND;
-	evt->data.buffer.buf = buf;
-	evt->data.buffer.len = 0;
+	evt->type = DATA_MGR_EVT_CONFIG_GET;
 
 	EVENT_SUBMIT(evt);
 }
@@ -354,9 +344,9 @@ static void cloud_manager_config_send(void)
 	struct cloud_codec_data codec;
 	struct data_mgr_event *evt = new_data_mgr_event();
 
-	evt->type = DATA_MGR_EVT_DATA_SEND;
+	evt->type = DATA_MGR_EVT_CONFIG_SEND;
 
-	err = cloud_codec_encode_cfg_data(&codec, &current_cfg);
+	err = cloud_codec_encode_config(&codec, &current_cfg);
 	if (err) {
 		LOG_ERR("Error encoding configuration, error: %d", err);
 		signal_error(err);
@@ -587,7 +577,6 @@ static void on_state_connected(struct data_msg_data *msg)
 	 * MODEM_MGR_SUB_SUB_STATE_DATE_TIME_OBTAINED state.
 	 */
 	if (IS_EVENT(msg, app, APP_MGR_EVT_CONFIG_SEND)) {
-		config_distribute(DATA_MGR_EVT_CONFIG_SEND);
 		cloud_manager_config_send();
 		return;
 	}
@@ -710,7 +699,7 @@ static void on_all_states(struct data_msg_data *msg)
 		data_status_set(APP_DATA_BATTERY);
 	}
 
-	if (IS_EVENT(msg, sensor, SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY)){
+	if (IS_EVENT(msg, sensor, SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY)) {
 		cloud_codec_populate_sensor_buffer(
 			sensors_buf,
 			&msg->manager.sensor.data.sensors,
@@ -726,7 +715,7 @@ static void on_all_states(struct data_msg_data *msg)
 			&head_accel_buf);
 }
 
-	if (IS_EVENT(msg, gps, GPS_MGR_EVT_DATA_READY)){
+	if (IS_EVENT(msg, gps, GPS_MGR_EVT_DATA_READY)) {
 		cloud_codec_populate_gps_buffer(
 			gps_buf,
 			&msg->manager.gps.data.gps,

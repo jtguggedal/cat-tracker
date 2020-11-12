@@ -45,17 +45,6 @@ static void message_handler(struct modem_msg_data *msg);
 
 K_MSGQ_DEFINE(msgq_modem, sizeof(struct modem_msg_data), 10, 4);
 
-// static void notify_modem_manager(struct modem_msg_data *data)
-// {
-// 	// while (k_msgq_put(&msgq_modem, data, K_NO_WAIT) != 0) {
-// 	// 	/* message queue is full: purge old data & try again */
-// 	// 	k_msgq_purge(&msgq_modem);
-// 	// 	LOG_ERR("Modem manager message queue full, queue purged");
-// 	// }
-
-// 	message_handler(data);
-// }
-
 static void signal_error(int err)
 {
 	struct modem_mgr_event *modem_mgr_event = new_modem_mgr_event();
@@ -402,6 +391,7 @@ static void message_handler(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
 		int err;
+
 		atomic_inc(&manager_count);
 
 		err = modem_setup();

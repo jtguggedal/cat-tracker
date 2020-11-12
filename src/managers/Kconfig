@@ -58,11 +58,7 @@ if CLOUD_MANAGER
 
 config CLOUD_MGR_THREAD_STACK_SIZE
 	int ""
-	default 4096
-
-config CLOUD_BACKEND
-	string
-	default "AWS_IOT"
+	default 6000
 
 config USE_CUSTOM_MQTT_CLIENT_ID
 	bool "Use custom MQTT client ID"
@@ -135,7 +131,7 @@ config DATA_MGR_THREAD_STACK_SIZE
 	int ""
 	default 2048
 
-rsource "../cloud_codec/Kconfig"
+rsource "../cloud/cloud_codec/Kconfig"
 
 endif
 

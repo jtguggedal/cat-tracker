@@ -382,8 +382,6 @@ void main(void)
 
 	self.thread_id = k_current_get();
 
-	cJSON_Init();
-
 	atomic_inc(&manager_count);
 
 	if (event_manager_init()) {

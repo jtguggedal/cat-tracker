@@ -11,8 +11,6 @@
 #include <event_manager.h>
 #include <drivers/gps.h>
 
-#include "cloud_codec.h"
-
 #define MODULE gps_manager
 
 #include "modules_common.h"
@@ -127,7 +125,7 @@ static void gps_manager_search_start(void)
 		return;
 	}
 
-	signal_event( GPS_MGR_EVT_ACTIVE);
+	signal_event(GPS_MGR_EVT_ACTIVE);
 }
 
 static void gps_manager_search_stop(void)

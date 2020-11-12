@@ -21,9 +21,6 @@ static int log_data_mgr_event(const struct event_header *eh, char *buf,
 	case DATA_MGR_EVT_DATA_SEND_BATCH:
 		strcpy(event_name, "DATA_MGR_EVT_DATA_SEND_BATCH");
 		break;
-	case DATA_MGR_EVT_CONFIG_SEND:
-		strcpy(event_name, "DATA_MGR_EVT_CONFIG_SEND");
-		break;
 	case DATA_MGR_EVT_UI_DATA_SEND:
 		strcpy(event_name, "DATA_MGR_EVT_UI_DATA_SEND");
 		break;
@@ -33,8 +30,11 @@ static int log_data_mgr_event(const struct event_header *eh, char *buf,
 	case DATA_MGR_EVT_CONFIG_READY:
 		strcpy(event_name, "DATA_MGR_EVT_CONFIG_READY");
 		break;
-	case DATA_MGR_EVT_DATA_GET:
-		strcpy(event_name, "DATA_MGR_EVT_DATA_GET");
+	case DATA_MGR_EVT_CONFIG_GET:
+		strcpy(event_name, "DATA_MGR_EVT_CONFIG_GET");
+		break;
+	case DATA_MGR_EVT_CONFIG_SEND:
+		strcpy(event_name, "DATA_MGR_EVT_CONFIG_SEND");
 		break;
 	case DATA_MGR_EVT_SHUTDOWN_READY:
 		strcpy(event_name, "DATA_MGR_EVT_SHUTDOWN_READY");

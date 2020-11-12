@@ -3,6 +3,7 @@
 #include <string.h>
 #include <drivers/sensor.h>
 #include "ext_sensors.h"
+#include <stdlib.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(ext_sensors, CONFIG_CAT_TRACKER_LOG_LEVEL);

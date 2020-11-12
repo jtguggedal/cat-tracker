@@ -16,7 +16,7 @@
 #include <drivers/gps.h>
 
 #include "event_manager.h"
-#include "cloud_codec.h"
+#include "cloud/cloud_codec/cloud_codec.h"
 
 #ifdef __cplusplus
 extern "C" {

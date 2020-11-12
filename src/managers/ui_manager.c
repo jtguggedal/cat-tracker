@@ -104,6 +104,7 @@ static void message_handler(struct ui_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
 		int err;
+
 		atomic_inc(&manager_count);
 
 		err = ui_manager_setup();

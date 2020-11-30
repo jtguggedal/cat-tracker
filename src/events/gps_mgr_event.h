@@ -23,7 +23,7 @@ extern "C" {
 #endif
 
 /** @brief GPS event types submitted by GPS manager. */
-enum gps_mgr_event_types {
+enum gps_mgr_event_type {
 	GPS_MGR_EVT_DATA_READY,
 	GPS_MGR_EVT_TIMEOUT,
 	GPS_MGR_EVT_ACTIVE,
@@ -36,7 +36,7 @@ enum gps_mgr_event_types {
 /** @brief GPS event. */
 struct gps_mgr_event {
 	struct event_header header;
-	enum gps_mgr_event_types type;
+	enum gps_mgr_event_type type;
 
 	union {
 		struct cloud_data_gps gps;

@@ -25,9 +25,10 @@ enum cloud_mgr_event_types {
 	CLOUD_MGR_EVT_CONNECTED,
 	CLOUD_MGR_EVT_DISCONNECTED,
 	CLOUD_MGR_EVT_CONNECTING,
+	CLOUD_MGR_EVT_CONNECTION_TIMEOUT,
 	CLOUD_MGR_EVT_CONFIG_RECEIVED,
 	CLOUD_MGR_EVT_FOTA_DONE,
-	CLOUD_MGR_EVT_SHARED_DATA_DONE,
+	CLOUD_MGR_EVT_DATA_ACK,
 	CLOUD_MGR_EVT_SHUTDOWN_READY,
 	CLOUD_MGR_EVT_ERROR
 };
@@ -44,6 +45,7 @@ struct cloud_mgr_event {
 
 	union {
 		struct cloud_data_cfg config;
+		void *ptr;
 		int err;
 	} data;
 };

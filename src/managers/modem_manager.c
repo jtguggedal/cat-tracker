@@ -15,6 +15,7 @@
 
 #define MODULE modem_manager
 
+#include "modules_common.h"
 #include "events/app_mgr_event.h"
 #include "events/data_mgr_event.h"
 #include "events/modem_mgr_event.h"
@@ -40,16 +41,20 @@ static struct modem_param_info modem_param;
 /* Value that always holds the latest RSRP value. */
 static uint16_t rsrp_value_latest;
 
+static void message_handler(struct modem_msg_data *msg);
+
 K_MSGQ_DEFINE(msgq_modem, sizeof(struct modem_msg_data), 10, 4);
 
-static void notify_modem_manager(struct modem_msg_data *data)
-{
-	while (k_msgq_put(&msgq_modem, data, K_NO_WAIT) != 0) {
-		/* message queue is full: purge old data & try again */
-		k_msgq_purge(&msgq_modem);
-		LOG_ERR("Modem manager message queue full, queue purged");
-	}
-}
+// static void notify_modem_manager(struct modem_msg_data *data)
+// {
+// 	// while (k_msgq_put(&msgq_modem, data, K_NO_WAIT) != 0) {
+// 	// 	/* message queue is full: purge old data & try again */
+// 	// 	k_msgq_purge(&msgq_modem);
+// 	// 	LOG_ERR("Modem manager message queue full, queue purged");
+// 	// }
+
+// 	message_handler(data);
+// }
 
 static void signal_error(int err)
 {
@@ -61,45 +66,22 @@ static void signal_error(int err)
 	EVENT_SUBMIT(modem_mgr_event);
 }
 
-static void signal_lte_connected(void)
+static void signal_event(enum modem_mgr_event_type type)
 {
 	struct modem_mgr_event *modem_mgr_event = new_modem_mgr_event();
 
-	modem_mgr_event->type = MODEM_MGR_EVT_LTE_CONNECTED;
-
-	EVENT_SUBMIT(modem_mgr_event);
-}
-
-static void signal_lte_disconnected(void)
-{
-	struct modem_mgr_event *modem_mgr_event = new_modem_mgr_event();
-
-	modem_mgr_event->type = MODEM_MGR_EVT_LTE_DISCONNECTED;
-
-	EVENT_SUBMIT(modem_mgr_event);
-}
-
-static void signal_lte_connecting(void)
-{
-	struct modem_mgr_event *modem_mgr_event = new_modem_mgr_event();
-
-	modem_mgr_event->type = MODEM_MGR_EVT_LTE_CONNECTING;
+	modem_mgr_event->type = type;
 
 	EVENT_SUBMIT(modem_mgr_event);
 }
 
 static void date_time_mgr_event_handler(const struct date_time_evt *evt)
 {
-	struct modem_mgr_event *modem_mgr_event = new_modem_mgr_event();
-
 	switch (evt->type) {
-	case DATE_TIME_OBTAINED_MODEM:
-		/* Fall through. */
-	case DATE_TIME_OBTAINED_NTP:
-		/* Fall through. */
+	case DATE_TIME_OBTAINED_MODEM: /* Fall through. */
+	case DATE_TIME_OBTAINED_NTP: /* Fall through. */
 	case DATE_TIME_OBTAINED_EXT:
-		modem_mgr_event->type = MODEM_MGR_EVT_DATE_TIME_OBTAINED;
-		EVENT_SUBMIT(modem_mgr_event);
+		signal_event(MODEM_MGR_EVT_DATE_TIME_OBTAINED);
 
 		/* De-register handler. At this point the application will have
 		 * date time to depend on indefinitely until a reboot occurs.
@@ -117,7 +99,6 @@ static void lte_evt_handler(const struct lte_lc_evt *const evt)
 {
 	switch (evt->type) {
 	case LTE_LC_EVT_NW_REG_STATUS:
-
 		if (evt->nw_reg_status == LTE_LC_NW_REG_UICC_FAIL) {
 			LOG_ERR("No SIM card detected!");
 			signal_error(-ENOTSUP);
@@ -126,7 +107,7 @@ static void lte_evt_handler(const struct lte_lc_evt *const evt)
 
 		if ((evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_HOME) &&
 		    (evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_ROAMING)) {
-			signal_lte_disconnected();
+			signal_event(MODEM_MGR_EVT_LTE_DISCONNECTED);
 			break;
 		}
 
@@ -134,7 +115,7 @@ static void lte_evt_handler(const struct lte_lc_evt *const evt)
 			evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
 			"Connected - home network" : "Connected - roaming");
 
-		signal_lte_connected();
+		signal_event(MODEM_MGR_EVT_LTE_CONNECTED);
 		break;
 	case LTE_LC_EVT_PSM_UPDATE:
 		LOG_DBG("PSM parameter update: TAU: %d, Active time: %d",
@@ -191,7 +172,7 @@ static int modem_configure(void)
 		LOG_ERR("lte_lc_init_connect_async, error: %d", err);
 	}
 
-	signal_lte_connecting();
+	signal_event(MODEM_MGR_EVT_LTE_CONNECTING);
 
 	return err;
 }
@@ -281,40 +262,29 @@ static int modem_manager_modem_data_get(void)
 
 	struct modem_mgr_event *modem_mgr_event = new_modem_mgr_event();
 
-	modem_mgr_event->data.modem.rsrp =
-		rsrp_value_latest;
+	modem_mgr_event->data.modem.rsrp = rsrp_value_latest;
 	modem_mgr_event->data.modem.ip =
 		modem_param.network.ip_address.value_string;
-	modem_mgr_event->data.modem.cell =
-		modem_param.network.cellid_dec;
+	modem_mgr_event->data.modem.cell = modem_param.network.cellid_dec;
 	modem_mgr_event->data.modem.mccmnc =
 		modem_param.network.current_operator.value_string;
-	modem_mgr_event->data.modem.area =
-		modem_param.network.area_code.value;
-	modem_mgr_event->data.modem.appv =
-		CONFIG_CAT_TRACKER_APP_VERSION;
-	modem_mgr_event->data.modem.brdv =
-		modem_param.device.board;
+	modem_mgr_event->data.modem.area = modem_param.network.area_code.value;
+	modem_mgr_event->data.modem.appv = CONFIG_CAT_TRACKER_APP_VERSION;
+	modem_mgr_event->data.modem.brdv = modem_param.device.board;
 	modem_mgr_event->data.modem.fw =
 		modem_param.device.modem_fw.value_string;
-	modem_mgr_event->data.modem.iccid =
-		modem_param.sim.iccid.value_string;
+	modem_mgr_event->data.modem.iccid = modem_param.sim.iccid.value_string;
 	modem_mgr_event->data.modem.nw_lte_m =
 		modem_param.network.lte_mode.value;
 	modem_mgr_event->data.modem.nw_nb_iot =
 		modem_param.network.nbiot_mode.value;
-	modem_mgr_event->data.modem.nw_gps =
-		modem_param.network.gps_mode.value;
+	modem_mgr_event->data.modem.nw_gps = modem_param.network.gps_mode.value;
 	modem_mgr_event->data.modem.bnd =
 		modem_param.network.current_band.value;
-	modem_mgr_event->data.modem.mod_ts =
-		k_uptime_get();
-	modem_mgr_event->data.modem.mod_ts_static =
-		k_uptime_get();
-	modem_mgr_event->data.modem.queued =
-		true;
-	modem_mgr_event->type =
-		MODEM_MGR_EVT_MODEM_DATA_READY;
+	modem_mgr_event->data.modem.mod_ts = k_uptime_get();
+	modem_mgr_event->data.modem.mod_ts_static = k_uptime_get();
+	modem_mgr_event->data.modem.queued = true;
+	modem_mgr_event->type = MODEM_MGR_EVT_MODEM_DATA_READY;
 
 	EVENT_SUBMIT(modem_mgr_event);
 
@@ -346,10 +316,11 @@ static int modem_manager_battery_data_get(void)
 	return 0;
 }
 
-static int lte_manager_setup(void)
+static int modem_setup(void)
 {
 	int err;
 
+	// This must be configurable
 	err = modem_configure_low_power();
 	if (err) {
 		LOG_ERR("modem_configure_low_power, error: %d", err);
@@ -379,7 +350,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.app = *event
 		};
 
-		notify_modem_manager(&modem_msg);
+		message_handler(&modem_msg);
 	}
 
 	if (is_cloud_mgr_event(eh)) {
@@ -388,7 +359,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.cloud = *event
 		};
 
-		notify_modem_manager(&modem_msg);
+		message_handler(&modem_msg);
 	}
 
 	if (is_util_mgr_event(eh)) {
@@ -397,17 +368,17 @@ static bool event_handler(const struct event_header *eh)
 			.manager.util = *event
 		};
 
-		notify_modem_manager(&modem_msg);
+		message_handler(&modem_msg);
 	}
 
 	return false;
 }
 
-static bool modem_data_requested(struct app_mgr_event_data *data_list,
+static bool modem_data_requested(enum app_mgr_data_type *data_list,
 				size_t count)
 {
-	for (int i = 0; i < count; i++) {
-		if (strcmp(data_list[i].buf, APP_DATA_MODEM) == 0) {
+	for (size_t i = 0; i < count; i++) {
+		if (data_list[i] == APP_DATA_MODEM) {
 			return true;
 		}
 	}
@@ -415,11 +386,11 @@ static bool modem_data_requested(struct app_mgr_event_data *data_list,
 	return false;
 }
 
-static bool battery_data_requested(struct app_mgr_event_data *data_list,
+static bool battery_data_requested(enum app_mgr_data_type *data_list,
 				   size_t count)
 {
-	for (int i = 0; i < count; i++) {
-		if (strcmp(data_list[i].buf, APP_DATA_BATTERY) == 0) {
+	for (size_t i = 0; i < count; i++) {
+		if (data_list[i] == APP_DATA_BATTERY) {
 			return true;
 		}
 	}
@@ -427,12 +398,22 @@ static bool battery_data_requested(struct app_mgr_event_data *data_list,
 	return false;
 }
 
-static void state_agnostic_manager_events(struct modem_msg_data *modem_msg)
+static void message_handler(struct modem_msg_data *msg)
 {
-	if (is_app_mgr_event(&modem_msg->manager.app.header) &&
-	    modem_msg->manager.app.type == APP_MGR_EVT_DATA_GET) {
-		if (modem_data_requested(modem_msg->manager.app.data_list,
-					 modem_msg->manager.app.count)) {
+	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
+		int err;
+		atomic_inc(&manager_count);
+
+		err = modem_setup();
+		if (err) {
+			LOG_ERR("modem_setup, error: %d", err);
+			signal_error(err);
+		}
+	}
+
+	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
+		if (modem_data_requested(msg->manager.app.data_list,
+					 msg->manager.app.count)) {
 
 			int err;
 
@@ -442,8 +423,8 @@ static void state_agnostic_manager_events(struct modem_msg_data *modem_msg)
 			}
 		}
 
-		if (battery_data_requested(modem_msg->manager.app.data_list,
-					   modem_msg->manager.app.count)) {
+		if (battery_data_requested(msg->manager.app.data_list,
+					   msg->manager.app.count)) {
 
 			int err;
 
@@ -454,14 +435,11 @@ static void state_agnostic_manager_events(struct modem_msg_data *modem_msg)
 		}
 	}
 
-	if (is_cloud_mgr_event(&modem_msg->manager.cloud.header) &&
-	    modem_msg->manager.cloud.type == CLOUD_MGR_EVT_CONNECTED) {
+	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
 		date_time_update_async(date_time_mgr_event_handler);
 	}
 
-	if (is_util_mgr_event(&modem_msg->manager.util.header) &&
-	    modem_msg->manager.util.type == UTIL_MGR_EVT_SHUTDOWN_REQUEST) {
-
+	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
 		lte_lc_power_off();
 
 		struct modem_mgr_event *modem_mgr_event = new_modem_mgr_event();
@@ -470,31 +448,6 @@ static void state_agnostic_manager_events(struct modem_msg_data *modem_msg)
 		EVENT_SUBMIT(modem_mgr_event);
 	}
 }
-
-static void modem_manager(void)
-{
-	int err;
-
-	struct modem_msg_data modem_msg;
-
-	atomic_inc(&manager_count);
-
-	err = lte_manager_setup();
-	if (err) {
-		LOG_ERR("lte_manager_setup, error: %d", err);
-		signal_error(err);
-	}
-
-	/* State agnostic manager. */
-	while (true) {
-		k_msgq_get(&msgq_modem, &modem_msg, K_FOREVER);
-		state_agnostic_manager_events(&modem_msg);
-	}
-}
-
-K_THREAD_DEFINE(modem_manager_thread, CONFIG_MODEM_MGR_THREAD_STACK_SIZE,
-		modem_manager, NULL, NULL, NULL,
-		K_HIGHEST_APPLICATION_THREAD_PRIO, 0, -1);
 
 EVENT_LISTENER(MODULE, event_handler);
 EVENT_SUBSCRIBE(MODULE, app_mgr_event);

@@ -16,6 +16,7 @@
 
 #define MODULE app_manager
 
+#include "modules_common.h"
 #include "events/app_mgr_event.h"
 #include "events/cloud_mgr_event.h"
 #include "events/data_mgr_event.h"
@@ -31,6 +32,8 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
 extern atomic_t manager_count;
 
+extern void cJSON_Init(void);
+
 struct app_msg_data {
 	union {
 		struct cloud_mgr_event cloud;
@@ -39,33 +42,16 @@ struct app_msg_data {
 		struct data_mgr_event data;
 		struct util_mgr_event util;
 		struct modem_mgr_event modem;
+		struct app_mgr_event app;
 	} manager;
 };
 
 /* Expose external manager threads. */
-#if defined(CONFIG_UTIL_MANAGER)
-extern const k_tid_t util_manager_thread;
-#endif
-#if defined(CONFIG_MODEM_MANAGER)
-extern const k_tid_t modem_manager_thread;
-#endif
-#if defined(CONFIG_CLOUD_MANAGER)
-extern const k_tid_t cloud_manager_thread;
-#endif
 #if defined(CONFIG_DATA_MANAGER)
 extern const k_tid_t data_manager_thread;
 #endif
-#if defined(CONFIG_GPS_MANAGER)
-extern const k_tid_t gps_manager_thread;
-#endif
-#if defined(CONFIG_UI_MANAGER)
-extern const k_tid_t ui_manager_thread;
-#endif
 #if defined(CONFIG_SENSOR_MANAGER)
 extern const k_tid_t sensor_manager_thread;
-#endif
-#if defined(CONFIG_OUTPUT_MANAGER)
-extern const k_tid_t output_manager_thread;
 #endif
 
 /* Application manager super states. */
@@ -76,23 +62,35 @@ enum app_state_type {
 
 /* Application sub states. */
 enum app_sub_state_type {
-	APP_MGR_SUB_STATE_ACTIVE,
-	APP_MGR_SUB_STATE_PASSIVE
+	APP_SUB_STATE_ACTIVE_MODE,
+	APP_SUB_STATE_PASSIVE_MODE,
 } app_sub_state;
 
 /* Internal copy of the device configuration. */
-struct cloud_data_cfg app_cfg = { 0 };
+static struct cloud_data_cfg app_cfg;
+
+static void data_sample_timer_handler(struct k_timer *dummy);
 
 /* Application manager message queue. */
 K_MSGQ_DEFINE(msgq_app, sizeof(struct app_msg_data), 10, 4);
 
-static void notify_app_manager(struct app_msg_data *data)
+/* Timers used by the application manager */
+K_TIMER_DEFINE(data_sample_timer, data_sample_timer_handler, NULL);
+K_TIMER_DEFINE(movement_timeout_timer, data_sample_timer_handler, NULL);
+K_TIMER_DEFINE(movement_resolution_timer, NULL, NULL);
+
+static struct module_data self = {
+	.msg_q = &msgq_app,
+};
+
+static void state_set(enum app_state_type new_state)
 {
-	while (k_msgq_put(&msgq_app, data, K_NO_WAIT) != 0) {
-		/* message queue is full: purge old data & try again */
-		k_msgq_purge(&msgq_app);
-		LOG_ERR("Application manager message queue full, queue purged");
-	}
+	app_state = new_state;
+}
+
+static void sub_state_set(enum app_sub_state_type new_state)
+{
+	app_sub_state = new_state;
 }
 
 static void signal_error(int err)
@@ -128,10 +126,10 @@ static void data_get_all(void)
 	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
 
 	/* Specify which data that is to be included in the transmission. */
-	app_mgr_event->data_list[0].buf = APP_DATA_MODEM;
-	app_mgr_event->data_list[1].buf = APP_DATA_BATTERY;
-	app_mgr_event->data_list[2].buf = APP_DATA_ENVIRONMENTALS;
-	app_mgr_event->data_list[3].buf = APP_DATA_GPS;
+	app_mgr_event->data_list[0] = APP_DATA_MODEM;
+	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
+	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTALS;
+	app_mgr_event->data_list[3] = APP_DATA_GNSS;
 
 	/* Set list count to number of data types passed in app_mgr_event. */
 	app_mgr_event->count = 4;
@@ -150,9 +148,9 @@ static void data_get_init(void)
 	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
 
 	/* Specify which data that is to be included in the transmission. */
-	app_mgr_event->data_list[0].buf = APP_DATA_MODEM;
-	app_mgr_event->data_list[1].buf = APP_DATA_BATTERY;
-	app_mgr_event->data_list[2].buf = APP_DATA_ENVIRONMENTALS;
+	app_mgr_event->data_list[0] = APP_DATA_MODEM;
+	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
+	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTALS;
 
 	/* Set list count to number of data types passed in app_mgr_event. */
 	app_mgr_event->count = 3;
@@ -168,12 +166,12 @@ static void data_get_init(void)
 
 static void data_sample_timer_handler(struct k_timer *dummy)
 {
-	data_get_all();
-}
+	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
 
-K_TIMER_DEFINE(data_sample_timer, data_sample_timer_handler, NULL);
-K_TIMER_DEFINE(movement_timeout_timer, data_sample_timer_handler, NULL);
-K_TIMER_DEFINE(movement_resolution_timer, NULL, NULL);
+	app_mgr_event->type = APP_MGR_EVT_DATA_GET_ALL;
+
+	EVENT_SUBMIT(app_mgr_event);
+}
 
 static bool event_handler(const struct event_header *eh)
 {
@@ -183,7 +181,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.cloud = *event
 		};
 
-		notify_app_manager(&app_msg);
+		module_enqueue_msg(&self, &app_msg);
 	}
 
 	if (is_data_mgr_event(eh)) {
@@ -192,7 +190,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.data = *event
 		};
 
-		notify_app_manager(&app_msg);
+		module_enqueue_msg(&self, &app_msg);
 	}
 
 	if (is_sensor_mgr_event(eh)) {
@@ -201,7 +199,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.sensor = *event
 		};
 
-		notify_app_manager(&app_msg);
+		module_enqueue_msg(&self, &app_msg);
 	}
 
 	if (is_util_mgr_event(eh)) {
@@ -210,7 +208,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.util = *event
 		};
 
-		notify_app_manager(&app_msg);
+		module_enqueue_msg(&self, &app_msg);
 	}
 
 	if (is_modem_mgr_event(eh)) {
@@ -219,18 +217,17 @@ static bool event_handler(const struct event_header *eh)
 			.manager.modem = *event
 		};
 
-		notify_app_manager(&app_msg);
+		module_enqueue_msg(&self, &app_msg);
 	}
 
 	return false;
 }
 
-static void on_state_init(struct app_msg_data *app_msg)
+static void on_state_init(struct app_msg_data *msg)
 {
-	if (is_data_mgr_event(&app_msg->manager.data.header) &&
-	    app_msg->manager.data.type == DATA_MGR_EVT_CONFIG_INIT) {
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_INIT)) {
 		/* Keep a copy of the new configuration. */
-		app_cfg = app_msg->manager.data.data.cfg;
+		app_cfg = msg->manager.data.data.cfg;
 
 		if (app_cfg.act) {
 			LOG_INF("Device mode: Active");
@@ -249,18 +246,17 @@ static void on_state_init(struct app_msg_data *app_msg)
 				K_SECONDS(app_cfg.movt));
 		}
 
-		app_state = APP_MGR_STATE_RUNNING;
-		app_sub_state = app_cfg.act ? APP_MGR_SUB_STATE_ACTIVE :
-					      APP_MGR_SUB_STATE_PASSIVE;
+		state_set(APP_MGR_STATE_RUNNING);
+		sub_state_set(app_cfg.act ? APP_SUB_STATE_ACTIVE_MODE :
+					    APP_SUB_STATE_PASSIVE_MODE);
 	}
 }
 
-void on_sub_state_passive(struct app_msg_data *app_msg)
+void on_sub_state_passive(struct app_msg_data *msg)
 {
-	if (is_data_mgr_event(&app_msg->manager.data.header) &&
-	    app_msg->manager.data.type == DATA_MGR_EVT_CONFIG_READY) {
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
 		/* Keep a copy of the new configuration. */
-		app_cfg = app_msg->manager.data.data.cfg;
+		app_cfg = msg->manager.data.data.cfg;
 
 		/*Acknowledge configuration to cloud. */
 		config_send();
@@ -273,7 +269,7 @@ void on_sub_state_passive(struct app_msg_data *app_msg)
 				      K_SECONDS(app_cfg.actw),
 				      K_SECONDS(app_cfg.actw));
 			k_timer_stop(&movement_timeout_timer);
-			app_sub_state = APP_MGR_SUB_STATE_ACTIVE;
+			sub_state_set(APP_SUB_STATE_ACTIVE_MODE);
 			return;
 		}
 
@@ -287,14 +283,8 @@ void on_sub_state_passive(struct app_msg_data *app_msg)
 		k_timer_stop(&data_sample_timer);
 	}
 
-	if (is_sensor_mgr_event(&app_msg->manager.sensor.header) &&
-	    app_msg->manager.sensor.type ==
-			SENSOR_MGR_EVT_MOVEMENT_DATA_READY) {
-
-		int err;
-
-		err = k_timer_remaining_get(&movement_resolution_timer);
-		if (err == 0) {
+	if (IS_EVENT(msg, sensor, SENSOR_MGR_EVT_MOVEMENT_DATA_READY)) {
+		if (k_timer_remaining_get(&movement_resolution_timer) == 0) {
 			/* Do an initial data sample. */
 			data_sample_timer_handler(NULL);
 
@@ -313,14 +303,13 @@ void on_sub_state_passive(struct app_msg_data *app_msg)
 	}
 }
 
-static void on_sub_state_active(struct app_msg_data *app_msg)
+static void on_sub_state_active(struct app_msg_data *msg)
 {
-	if (is_data_mgr_event(&app_msg->manager.data.header) &&
-	    app_msg->manager.data.type == DATA_MGR_EVT_CONFIG_READY) {
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
 		/* Keep a copy of the new configuration. */
-		app_cfg = app_msg->manager.data.data.cfg;
+		app_cfg = msg->manager.data.data.cfg;
 
-		/*Acknowledge configuration to cloud. */
+		/* Acknowledge configuration to cloud. */
 		config_send();
 
 		if (!app_cfg.act) {
@@ -331,7 +320,7 @@ static void on_sub_state_active(struct app_msg_data *app_msg)
 				      K_SECONDS(app_cfg.movt),
 				      K_SECONDS(app_cfg.movt));
 			k_timer_stop(&data_sample_timer);
-			app_sub_state = APP_MGR_SUB_STATE_PASSIVE;
+			sub_state_set(APP_SUB_STATE_PASSIVE_MODE);
 			return;
 		}
 
@@ -346,24 +335,24 @@ static void on_sub_state_active(struct app_msg_data *app_msg)
 	}
 }
 
-static void on_state_running(struct app_msg_data *app_msg)
+static void on_state_running(struct app_msg_data *msg)
 {
-	if (is_cloud_mgr_event(&app_msg->manager.cloud.header) &&
-	    app_msg->manager.cloud.type == CLOUD_MGR_EVT_CONNECTED) {
+	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
 		config_get();
 	}
 
-	if (is_modem_mgr_event(&app_msg->manager.modem.header) &&
-	    app_msg->manager.modem.type == MODEM_MGR_EVT_DATE_TIME_OBTAINED) {
+	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_DATE_TIME_OBTAINED)) {
 		data_get_init();
+	}
+
+	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET_ALL)) {
+		data_get_all();
 	}
 }
 
-static void state_agnostic_manager_events(struct app_msg_data *app_msg)
+static void on_all_events(struct app_msg_data *msg)
 {
-	if (is_util_mgr_event(&app_msg->manager.util.header) &&
-	    app_msg->manager.util.type == UTIL_MGR_EVT_SHUTDOWN_REQUEST) {
-
+	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
 		k_timer_stop(&data_sample_timer);
 		k_timer_stop(&movement_timeout_timer);
 		k_timer_stop(&movement_resolution_timer);
@@ -375,9 +364,22 @@ static void state_agnostic_manager_events(struct app_msg_data *app_msg)
 	}
 }
 
+static void signal_app_start(void)
+{
+	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
+
+	app_mgr_event->type = APP_MGR_EVT_START;
+	EVENT_SUBMIT(app_mgr_event);
+}
+
 void main(void)
 {
 	int err;
+	struct app_msg_data msg;
+
+	self.thread_id = k_current_get();
+
+	cJSON_Init();
 
 	atomic_inc(&manager_count);
 
@@ -393,59 +395,36 @@ void main(void)
 	}
 #endif
 
-	struct app_msg_data app_msg;
-
-	/* Start manager threads. */
-#if defined(CONFIG_UTIL_MANAGER)
-	k_thread_start(util_manager_thread);
-#endif
-#if defined(CONFIG_MODEM_MANAGER)
-	k_thread_start(modem_manager_thread);
-#endif
-#if defined(CONFIG_CLOUD_MANAGER)
-	k_thread_start(cloud_manager_thread);
-#endif
-#if defined(CONFIG_DATA_MANAGER)
-	k_thread_start(data_manager_thread);
-#endif
-#if defined(CONFIG_GPS_MANAGER)
-	k_thread_start(gps_manager_thread);
-#endif
-#if defined(CONFIG_UI_MANAGER)
-	k_thread_start(ui_manager_thread);
-#endif
-#if defined(CONFIG_SENSOR_MANAGER)
-	k_thread_start(sensor_manager_thread);
-#endif
-#if defined(CONFIG_OUTPUT_MANAGER)
-	k_thread_start(output_manager_thread);
-#endif
+	signal_app_start();
 
 	while (true) {
-		k_msgq_get(&msgq_app, &app_msg, K_FOREVER);
+		module_get_next_msg(&self, &msg);
+
 		switch (app_state) {
 		case APP_MGR_STATE_INIT:
-			on_state_init(&app_msg);
+			on_state_init(&msg);
 			break;
 		case APP_MGR_STATE_RUNNING:
 			switch (app_sub_state) {
-			case APP_MGR_SUB_STATE_ACTIVE:
-				on_sub_state_active(&app_msg);
+			case APP_SUB_STATE_ACTIVE_MODE:
+				on_sub_state_active(&msg);
 				break;
-			case APP_MGR_SUB_STATE_PASSIVE:
-				on_sub_state_passive(&app_msg);
+			case APP_SUB_STATE_PASSIVE_MODE:
+				on_sub_state_passive(&msg);
 				break;
 			default:
-				LOG_WRN("Unknown application sub state.");
+				LOG_WRN("Unknown application sub state");
 				break;
 			}
-			on_state_running(&app_msg);
+
+			on_state_running(&msg);
 			break;
 		default:
-			LOG_WRN("Unknown application state.");
+			LOG_WRN("Unknown application state");
 			break;
 		}
-		state_agnostic_manager_events(&app_msg);
+
+		on_all_events(&msg);
 	}
 }
 

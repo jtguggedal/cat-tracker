@@ -8,6 +8,24 @@
 
 #include "app_mgr_event.h"
 
+static char *type2str(enum app_mgr_data_type type)
+{
+	switch (type) {
+	case APP_DATA_ENVIRONMENTALS:
+		return "ENV";
+	case APP_DATA_MOVEMENT:
+		return "MOVE";
+	case APP_DATA_MODEM:
+		return "MODEM";
+	case APP_DATA_BATTERY:
+		return "BAT";
+	case APP_DATA_GNSS:
+		return "GNSS";
+	default:
+		return "Unknown type";
+	}
+}
+
 static int log_app_mgr_event(const struct event_header *eh, char *buf,
 			  size_t buf_len)
 {
@@ -20,7 +38,7 @@ static int log_app_mgr_event(const struct event_header *eh, char *buf,
 		strcpy(event_name, "APP_MGR_EVT_DATA_GET");
 
 		for (int i = 0; i < event->count; i++) {
-			strcat(data_types, event->data_list[i].buf);
+			strcat(data_types, type2str(event->data_list[i]));
 
 			if (i == event->count - 1) {
 				break;

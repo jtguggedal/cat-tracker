@@ -5,6 +5,7 @@
 #
 
 zephyr_include_directories(.)
+target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modules_common.c)
 target_sources_ifdef(CONFIG_CLOUD_MANAGER app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/cloud_manager.c)
 target_sources_ifdef(CONFIG_GPS_MANAGER app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gps_manager.c)
 target_sources_ifdef(CONFIG_MODEM_MANAGER app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/modem_manager.c)

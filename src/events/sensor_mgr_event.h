@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-/** @brief Sensor event types submitted by Sensor manager. */
+/** @brief Sensor event types su bmitted by Sensor manager. */
 enum sensor_mgr_event_types {
 	SENSOR_MGR_EVT_MOVEMENT_DATA_READY,
 	SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY,

@@ -12,6 +12,7 @@
 
 #define MODULE data_manager
 
+#include "modules_common.h"
 #include "events/app_mgr_event.h"
 #include "events/cloud_mgr_event.h"
 #include "events/data_mgr_event.h"
@@ -37,6 +38,8 @@ extern atomic_t manager_count;
 #define DEFAULT_GPS_TIMEOUT_SECONDS		60
 #define DEFAULT_DEVICE_MODE			true
 
+static void data_send_work_fn(struct k_work *work);
+
 struct data_msg_data {
 	union {
 		struct modem_mgr_event modem;
@@ -50,6 +53,11 @@ struct data_msg_data {
 	} manager;
 };
 
+K_MSGQ_DEFINE(msgq_data, sizeof(struct data_msg_data), 10, 4);
+
+static struct module_data self = {
+	.msg_q = &msgq_data,
+};
 /* Ringbuffers. All data received by the data manager are stored in ringbuffers.
  * Upon a LTE connection loss the device will keep sampling/storing data in
  * the buffers, and empty the buffers in batches upon a reconnect.
@@ -70,7 +78,7 @@ static int head_accel_buf;
 static int head_bat_buf;
 
 /* Default device configuration. */
-static struct cloud_data_cfg cfg = {
+static struct cloud_data_cfg current_cfg = {
 	.gpst = DEFAULT_GPS_TIMEOUT_SECONDS,
 	.act  = DEFAULT_DEVICE_MODE,
 	.actw = DEFAULT_ACTIVE_TIMEOUT_SECONDS,
@@ -79,41 +87,29 @@ static struct cloud_data_cfg cfg = {
 	.acct = DEFAULT_ACCELEROMETER_THRESHOLD
 };
 
-/* Data manager super states. */
-enum data_manager_state_type {
-	/* In this state the data manager does not alter its data because
-	 * it is shared with other managers.
-	 */
-	DATA_MGR_STATE_NOT_SHARING_DATA,
-	/* This state is triggered if the data manager shares data. In this
-	 * state the data manager can not alter the data that is shared.
-	 */
-	DATA_MGR_STATE_SHARING_DATA
-} data_state;
+/* Cloud connection state state. */
+enum connection_state {
+	STATE_DISCONNECTED,
+	STATE_CONNECTED
+} state;
 
-/* Data manager sub states. */
-enum data_manager_sub_state_type {
-	DATA_MGR_SUB_STATE_DISCONNECTED,
-	DATA_MGR_SUB_STATE_CONNECTED
-} data_sub_state;
-
-/* Data manager sub-sub states. */
-enum data_manager_sub_sub_state_type {
-	DATA_MGR_SUB_SUB_STATE_TIME_NOT_OBTAINED,
-	DATA_MGR_SUB_SUB_STATE_TIME_OBTAINED
-} data_sub_sub_state;
+/* Time state. */
+enum time_state {
+	TIME_STATE_NOT_OBTAINED,
+	TIME_STATE_OBTAINED
+} time_state;
 
 static struct k_delayed_work data_send_work;
 
 /* List used to keep track of responses from other managers with data that is
  * requested to be sampled/published.
  */
-static struct app_mgr_event_data data_types_list[APP_DATA_NUMBER_OF_TYPES_MAX];
+static enum app_mgr_data_type data_types_list[APP_DATA_NUMBER_OF_TYPES_MAX];
 
 /* Total number of data types requested for a particular sample/publish
  * cycle.
  */
-static int affirmed_data_types;
+static int received_data_type_count;
 
 /* Counter of data types received from other managers. When this number
  * matches the affirmed_data_type variable all requested data has been
@@ -121,15 +117,70 @@ static int affirmed_data_types;
  */
 static int data_cnt;
 
-K_MSGQ_DEFINE(msgq_data, sizeof(struct data_msg_data), 10, 4);
+/* Data that has been encoded and shipped on, but has not yet been ACKed as sent
+ */
+static void *pending_data[10];
 
-static void notify_data_manager(struct data_msg_data *data)
+static char *state2str(enum connection_state state)
 {
-	while (k_msgq_put(&msgq_data, data, K_NO_WAIT) != 0) {
-		/* message queue is full: purge old data & try again */
-		k_msgq_purge(&msgq_data);
-		LOG_ERR("Data manager message queue full, queue purged");
+	switch(state) {
+		case STATE_DISCONNECTED:
+			return "STATE_DISCONNECTED";
+		case STATE_CONNECTED:
+			return "DATA_MGR_STATE_CONNECTED";
+		default:
+			return "Unknown";
 	}
+}
+
+static void state_set(enum connection_state new_state)
+{
+	LOG_DBG("State transition %s --> %s",
+		log_strdup(state2str(state)),
+		log_strdup(state2str(new_state)));
+
+	state = new_state;
+}
+
+static void time_state_set(enum time_state new_state)
+{
+	time_state = new_state;
+}
+
+static bool pending_data_add(void *ptr)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(pending_data); i++) {
+		if (pending_data[i] == NULL) {
+			pending_data[i] = ptr;
+
+			LOG_DBG("Pending data added: %p", ptr);
+
+			return true;
+		}
+	}
+
+	LOG_WRN("Could not add pointer to pending list");
+
+	return false;
+}
+
+static bool pending_data_ack(void *ptr)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(pending_data); i++) {
+		if (pending_data[i] == ptr) {
+			k_free(ptr);
+
+			LOG_DBG("Pending data ACKed: %p", pending_data[i]);
+
+			pending_data[i] = NULL;
+
+			return true;
+		}
+	}
+
+	LOG_WRN("No matching pointer was found");
+
+	return false;
 }
 
 static int config_settings_handler(const char *key, size_t len,
@@ -138,7 +189,7 @@ static int config_settings_handler(const char *key, size_t len,
 	int err;
 
 	if (strcmp(key, DEVICE_SETTINGS_CONFIG_KEY) == 0) {
-		err = read_cb(cb_arg, &cfg, sizeof(cfg));
+		err = read_cb(cb_arg, &current_cfg, sizeof(current_cfg));
 		if (err < 0) {
 			LOG_ERR("Failed to load configuration, error: %d", err);
 			return err;
@@ -170,11 +221,12 @@ static int data_manager_save_config(const void *buf, size_t buf_len)
 static int data_manager_setup(void)
 {
 	int err;
-
 	struct settings_handler settings_cfg = {
 		.name = DEVICE_SETTINGS_KEY,
 		.h_set = config_settings_handler
 	};
+
+	k_delayed_work_init(&data_send_work, data_send_work_fn);
 
 	err = settings_subsys_init();
 	if (err) {
@@ -207,50 +259,138 @@ static void signal_error(int err)
 	EVENT_SUBMIT(data_mgr_event);
 }
 
-/* This function shares the pointer to and length of the ringbuffers. When this
- * occurs the data manager switches to a state where it can not alter the
- * ringbuffers. When the cloud manager acknowledges when it is finished with the
- * data it sends an events that it is done using the data. The data manager then
- * switches back to a state where it can manipulate the ringbuffers again.
+/* This function allocates buffer on the heap, which needs to be freed afte use.
  */
 static void data_send(void)
 {
-	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
+	int err;
+	struct data_mgr_event *data_mgr_event_new = new_data_mgr_event();
+	struct data_mgr_event *data_mgr_event_batch = new_data_mgr_event();
+	struct cloud_codec_data codec;
 
-	data_mgr_event->type = DATA_MGR_EVT_DATA_SEND;
-	data_mgr_event->data.buffer.bat = bat_buf;
-	data_mgr_event->data.buffer.bat_count = ARRAY_SIZE(bat_buf);
-	data_mgr_event->data.buffer.accel = accel_buf;
-	data_mgr_event->data.buffer.accel_count = ARRAY_SIZE(accel_buf);
-	data_mgr_event->data.buffer.gps = gps_buf;
-	data_mgr_event->data.buffer.gps_count = ARRAY_SIZE(gps_buf);
-	data_mgr_event->data.buffer.modem = modem_buf;
-	data_mgr_event->data.buffer.modem_count = ARRAY_SIZE(modem_buf);
-	data_mgr_event->data.buffer.ui = ui_buf;
-	data_mgr_event->data.buffer.ui_count = ARRAY_SIZE(ui_buf);
-	data_mgr_event->data.buffer.sensors = sensors_buf;
-	data_mgr_event->data.buffer.sensors_count = ARRAY_SIZE(sensors_buf);
+	data_mgr_event_new->type = DATA_MGR_EVT_DATA_SEND;
+	data_mgr_event_batch->type = DATA_MGR_EVT_DATA_SEND_BATCH;
 
-	/* Send the head of the ringbuffers signifying where the newest data
-	 * is stored.
-	 */
-	data_mgr_event->data.buffer.head_gps = head_gps_buf;
-	data_mgr_event->data.buffer.head_bat = head_bat_buf;
-	data_mgr_event->data.buffer.head_modem = head_modem_buf;
-	data_mgr_event->data.buffer.head_ui = head_ui_buf;
-	data_mgr_event->data.buffer.head_accel = head_accel_buf;
-	data_mgr_event->data.buffer.head_sensor = head_sensor_buf;
+	// Encode newest data
+	err = cloud_codec_encode_data(
+		&codec,
+		&gps_buf[head_gps_buf],
+		&sensors_buf[head_sensor_buf],
+		&modem_buf[head_modem_buf],
+		&ui_buf[head_ui_buf],
+		&accel_buf[head_accel_buf],
+		&bat_buf[head_bat_buf]);
+	if (err == -ENODATA) {
+		/* This error might occurs when data has not been obtained prior
+		 * to data encoding.
+		 */
+		LOG_WRN("Ringbuffers empty...");
+		LOG_WRN("No data to encode, error: %d", err);
+		return;
+	} else if (err) {
+		LOG_ERR("Error encoding message %d", err);
+		signal_error(err);
+		return;
+	} else {
+		LOG_DBG("Data encoded successfully");
+	}
 
-	EVENT_SUBMIT(data_mgr_event);
+	data_mgr_event_new->data.buffer.buf = codec.buf;
+	data_mgr_event_new->data.buffer.len = codec.len;
+
+	pending_data_add(codec.buf);
+	EVENT_SUBMIT(data_mgr_event_new);
+
+	codec.buf = NULL;
+	codec.len = 0;
+
+	// Encode batch data
+	err = cloud_codec_encode_batch_data(&codec,
+					gps_buf,
+					sensors_buf,
+					modem_buf,
+					ui_buf,
+					accel_buf,
+					bat_buf,
+					ARRAY_SIZE(gps_buf),
+					ARRAY_SIZE(sensors_buf),
+					ARRAY_SIZE(modem_buf),
+					ARRAY_SIZE(ui_buf),
+					ARRAY_SIZE(accel_buf),
+					ARRAY_SIZE(bat_buf));
+	if (err) {
+		LOG_ERR("Error batch-enconding data: %d", err);
+		signal_error(err);
+		return;
+	}
+
+	if (codec.buf == NULL) {
+		LOG_DBG("No batch data to send");
+		return;
+	}
+
+	data_mgr_event_batch->data.buffer.buf = codec.buf;
+	data_mgr_event_batch->data.buffer.len = codec.len;
+
+	pending_data_add(codec.buf);
+	EVENT_SUBMIT(data_mgr_event_batch);
 }
+
+static void cloud_manager_config_get(void)
+{
+	struct data_mgr_event *evt = new_data_mgr_event();
+	static char *buf = "";
+
+	evt->type = DATA_MGR_EVT_DATA_SEND;
+	evt->data.buffer.buf = buf;
+	evt->data.buffer.len = 0;
+
+	EVENT_SUBMIT(evt);
+}
+
+static void cloud_manager_config_send(struct data_mgr_event *data)
+{
+	int err;
+	struct cloud_codec_data codec;
+	struct data_mgr_event *evt = new_data_mgr_event();
+
+	evt->type = DATA_MGR_EVT_DATA_SEND;
+
+	err = cloud_codec_encode_cfg_data(&codec, &data->data.cfg);
+	if (err) {
+		LOG_ERR("Error encoding configuration, error: %d", err);
+		signal_error(err);
+		return;
+	}
+
+	evt->data.buffer.buf = codec.buf;
+	evt->data.buffer.len = codec.len;
+
+	pending_data_add(codec.buf);
+	EVENT_SUBMIT(evt);
+}
+
 
 static void data_ui_send(void)
 {
-	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
+	int err;
+	struct data_mgr_event *evt = new_data_mgr_event();
+	struct cloud_codec_data codec;
 
 	/* UI data is sent as a separate copy. */
-	data_mgr_event->type = DATA_MGR_EVT_UI_DATA_SEND;
-	data_mgr_event->data.ui = ui_buf[head_ui_buf];
+	evt->type = DATA_MGR_EVT_UI_DATA_SEND;
+
+	err = cloud_codec_encode_ui_data(&codec, &ui_buf[head_ui_buf]);
+	if (err) {
+		LOG_ERR("Enconding button press, error: %d", err);
+		signal_error(err);
+		return;
+	}
+
+	evt->data.buffer.buf = codec.buf;
+	evt->data.buffer.len = codec.len;
+
+	pending_data_add(codec.buf);
 
 	/* Since a copy of data is sent we must unqueue the head of the
 	 * UI buffer.
@@ -258,38 +398,16 @@ static void data_ui_send(void)
 
 	ui_buf[head_ui_buf].queued = false;
 
-	EVENT_SUBMIT(data_mgr_event);
+	EVENT_SUBMIT(evt);
 }
 
-static void config_signal_managers(void)
+static void config_distribute(enum data_mgr_event_types type)
 {
 	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
 
-	data_mgr_event->type = DATA_MGR_EVT_CONFIG_READY;
-	data_mgr_event->data.cfg = cfg;
+	data_mgr_event->type = type;
+	data_mgr_event->data.cfg = current_cfg;
 
-	EVENT_SUBMIT(data_mgr_event);
-}
-
-static void config_send(void)
-{
-	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
-
-	data_mgr_event->type = DATA_MGR_EVT_CONFIG_SEND;
-	data_mgr_event->data.cfg = cfg;
-
-	/* Send configuration to cloud manager. */
-	EVENT_SUBMIT(data_mgr_event);
-}
-
-static void config_init(void)
-{
-	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
-
-	data_mgr_event->type = DATA_MGR_EVT_CONFIG_INIT;
-	data_mgr_event->data.cfg = cfg;
-
-	/* Send initial config to other managers. */
 	EVENT_SUBMIT(data_mgr_event);
 }
 
@@ -301,7 +419,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.modem = *event
 		};
 
-		notify_data_manager(&data_msg);
+		module_enqueue_msg(&self, &data_msg);
 	}
 
 	if (is_cloud_mgr_event(eh)) {
@@ -310,7 +428,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.cloud = *event
 		};
 
-		notify_data_manager(&data_msg);
+		module_enqueue_msg(&self, &data_msg);
 	}
 
 	if (is_gps_mgr_event(eh)) {
@@ -319,7 +437,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.gps = *event
 		};
 
-		notify_data_manager(&data_msg);
+		module_enqueue_msg(&self, &data_msg);
 	}
 
 	if (is_sensor_mgr_event(eh)) {
@@ -328,7 +446,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.sensor = *event
 		};
 
-		notify_data_manager(&data_msg);
+		module_enqueue_msg(&self, &data_msg);
 	}
 
 	if (is_ui_mgr_event(eh)) {
@@ -337,7 +455,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.ui = *event
 		};
 
-		notify_data_manager(&data_msg);
+		module_enqueue_msg(&self, &data_msg);
 	}
 
 	if (is_app_mgr_event(eh)) {
@@ -346,7 +464,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.app = *event
 		};
 
-		notify_data_manager(&data_msg);
+		module_enqueue_msg(&self, &data_msg);
 	}
 
 	if (is_data_mgr_event(eh)) {
@@ -355,7 +473,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.data = *event
 		};
 
-		notify_data_manager(&data_msg);
+		module_enqueue_msg(&self, &data_msg);
 	}
 
 	if (is_util_mgr_event(eh)) {
@@ -364,112 +482,127 @@ static bool event_handler(const struct event_header *eh)
 			.manager.util = *event
 		};
 
-		notify_data_manager(&data_msg);
+		module_enqueue_msg(&self, &data_msg);
 	}
 
 	return false;
 }
 
-static void clear_data_list(void)
+static void clear_local_data_list(void)
 {
-	for (int i = 0; i < APP_DATA_NUMBER_OF_TYPES_MAX; i++) {
-		data_types_list[i].buf = "\0";
-	}
-	affirmed_data_types = 0;
+	received_data_type_count = 0;
 	data_cnt = 0;
 }
 
 static void data_send_work_fn(struct k_work *work)
 {
-
 	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
 
 	app_mgr_event->type = APP_MGR_EVT_DATA_SEND;
 
 	EVENT_SUBMIT(app_mgr_event);
 
-	clear_data_list();
+	clear_local_data_list();
 	k_delayed_work_cancel(&data_send_work);
 }
 
-static void data_status_set(const char *data_type)
+static void data_status_set(enum app_mgr_data_type data_type)
 {
-	if (data_type == NULL) {
-		return;
-	}
-
-	for (int i = 0; i < affirmed_data_types; i++) {
-
-		if (data_types_list[i].buf == NULL) {
-			continue;
-		}
-
-		if (strcmp(data_types_list[i].buf, data_type) == 0) {
+	for (size_t i = 0; i < received_data_type_count; i++) {
+		if (data_types_list[i] == data_type) {
 			data_cnt++;
+			break;
 		}
 	}
 
-	if (data_cnt == affirmed_data_types) {
+	if (data_cnt == received_data_type_count) {
 		data_send_work_fn(NULL);
 	}
 }
 
-static void data_list_set(struct app_mgr_event_data *data_list, size_t count)
+static void data_list_set(enum app_mgr_data_type *data_list, size_t count)
 {
-	if (count > APP_DATA_NUMBER_OF_TYPES_MAX) {
+	if ((count == 0) || (count > APP_DATA_NUMBER_OF_TYPES_MAX)) {
 		LOG_ERR("Invalid data type list length");
 		return;
 	}
 
-	if (data_list == NULL) {
-		LOG_ERR("List empty!");
+	clear_local_data_list();
+
+	for (size_t i = 0; i < count; i++) {
+		data_types_list[i] = data_list[i];
+	}
+
+	received_data_type_count = count;
+}
+
+static void on_state_disconnected(struct data_msg_data *msg)
+{
+	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
+		state_set(STATE_CONNECTED);
+	}
+}
+
+static void on_state_connected(struct data_msg_data *msg)
+{
+	/* Send data only if time is obtained. Otherwise cache it. */
+	switch (time_state) {
+	case TIME_STATE_OBTAINED:
+		if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_SEND)) {
+			data_send();
+			return;
+		}
+
+		if (IS_EVENT(msg, ui, UI_MGR_EVT_BUTTON_DATA_READY)) {
+			cloud_codec_populate_ui_buffer(
+						ui_buf,
+						&msg->manager.ui.data.ui,
+						&head_ui_buf);
+			data_ui_send();
+			return;
+		}
+		break;
+	case TIME_STATE_NOT_OBTAINED:
+		if (IS_EVENT(msg, modem, MODEM_MGR_EVT_DATE_TIME_OBTAINED)) {
+			time_state_set(TIME_STATE_OBTAINED);
+			return;
+		}
+		break;
+	default:
+		LOG_WRN("Unknown sub-sub state.");
+		break;
+	}
+
+	if (IS_EVENT(msg, app, APP_MGR_EVT_CONFIG_GET)) {
+		cloud_manager_config_get();
 		return;
 	}
 
-	clear_data_list();
-
-	for (int i = 0; i < count; i++) {
-		data_types_list[i].buf = data_list[i].buf;
-	}
-
-	affirmed_data_types = count;
-}
-
-static void on_state_disconnected(struct data_msg_data *data_msg)
-{
-	if (is_cloud_mgr_event(&data_msg->manager.cloud.header) &&
-	    data_msg->manager.cloud.type == CLOUD_MGR_EVT_CONNECTED) {
-		data_sub_state = DATA_MGR_SUB_STATE_CONNECTED;
-	}
-}
-
-static void on_state_connected(struct data_msg_data *data_msg)
-{
-	if (is_cloud_mgr_event(&data_msg->manager.cloud.header) &&
-	    data_msg->manager.cloud.type == CLOUD_MGR_EVT_DISCONNECTED) {
-		data_sub_state = DATA_MGR_SUB_STATE_DISCONNECTED;
+	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_DISCONNECTED)) {
+		state_set(STATE_DISCONNECTED);
+		return;
 	}
 
 	/* Config is not timestamped and does not to be dependent on the
 	 * MODEM_MGR_SUB_SUB_STATE_DATE_TIME_OBTAINED state.
 	 */
-	if (is_app_mgr_event(&data_msg->manager.app.header) &&
-	    data_msg->manager.app.type == APP_MGR_EVT_CONFIG_SEND) {
-		config_send();
+	if (IS_EVENT(msg, app, APP_MGR_EVT_CONFIG_SEND)) {
+		config_distribute(DATA_MGR_EVT_CONFIG_SEND);
+		cloud_manager_config_send(&msg->manager.data);
+		return;
 	}
 
-	if (is_cloud_mgr_event(&data_msg->manager.cloud.header) &&
-	    data_msg->manager.cloud.type == CLOUD_MGR_EVT_CONFIG_RECEIVED) {
+	/* DIstribute new configuration received form cloud */
+	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONFIG_RECEIVED)) {
 
 		int err;
-
 		struct cloud_data_cfg new = {
-			.act = data_msg->manager.cloud.data.config.act,
-			.actw = data_msg->manager.cloud.data.config.actw,
-			.pasw = data_msg->manager.cloud.data.config.pasw,
-			.movt = data_msg->manager.cloud.data.config.movt,
-			.gpst = data_msg->manager.cloud.data.config.gpst,
-			.acct = data_msg->manager.cloud.data.config.acct,
+			.act = msg->manager.cloud.data.config.act,
+			.actw = msg->manager.cloud.data.config.actw,
+			.pasw = msg->manager.cloud.data.config.pasw,
+			.movt = msg->manager.cloud.data.config.movt,
+			.gpst = msg->manager.cloud.data.config.gpst,
+			.acct = msg->manager.cloud.data.config.acct,
 
 		};
 
@@ -479,212 +612,148 @@ static void on_state_connected(struct data_msg_data *data_msg)
 		 * minimum allowed values so that extremely low configurations
 		 * dont suffocate the application.
 		 */
-		if (cfg.act != new.act) {
-			cfg.act = new.act;
+		if (current_cfg.act != new.act) {
+			current_cfg.act = new.act;
 
-			if (cfg.act) {
+			if (current_cfg.act) {
 				LOG_WRN("New Device mode: Active");
 			} else {
 				LOG_WRN("New Device mode: Passive");
 			}
 		}
 
-		if (cfg.actw != new.actw && new.actw != 0) {
-			cfg.actw = new.actw;
-			LOG_WRN("New Active timeout: %d", cfg.actw);
+		if (current_cfg.actw != new.actw && new.actw != 0) {
+			current_cfg.actw = new.actw;
+			LOG_WRN("New Active timeout: %d", current_cfg.actw);
 		}
 
-		if (cfg.pasw != new.pasw && new.pasw != 0) {
-			cfg.pasw = new.pasw;
-			LOG_WRN("New Movement resolution: %d", cfg.pasw);
+		if (current_cfg.pasw != new.pasw && new.pasw != 0) {
+			current_cfg.pasw = new.pasw;
+			LOG_WRN("New Movement resolution: %d",
+				current_cfg.pasw);
 		}
 
-		if (cfg.movt != new.movt && new.movt != 0) {
-			cfg.movt = new.movt;
-			LOG_WRN("New Movement timeout: %d", cfg.movt);
+		if (current_cfg.movt != new.movt && new.movt != 0) {
+			current_cfg.movt = new.movt;
+			LOG_WRN("New Movement timeout: %d", current_cfg.movt);
 		}
 
-		if (cfg.acct != new.acct && new.acct != 0) {
-			cfg.acct = new.acct;
-			LOG_WRN("New Movement threshold: %d", cfg.acct);
+		if (current_cfg.acct != new.acct && new.acct != 0) {
+			current_cfg.acct = new.acct;
+			LOG_WRN("New Movement threshold: %d", current_cfg.acct);
 		}
 
-		if (cfg.gpst != new.gpst && new.gpst != 0) {
-			cfg.gpst = new.gpst;
-			LOG_WRN("New GPS timeout: %d", cfg.gpst);
+		if (current_cfg.gpst != new.gpst && new.gpst != 0) {
+			current_cfg.gpst = new.gpst;
+			LOG_WRN("New GPS timeout: %d", current_cfg.gpst);
 		}
 
-		err = data_manager_save_config(&cfg, sizeof(cfg));
+		err = data_manager_save_config(&current_cfg,
+					       sizeof(current_cfg));
 		if (err) {
 			LOG_WRN("Configuration not stored, error: %d", err);
 		}
 
-		config_signal_managers();
+		config_distribute(DATA_MGR_EVT_CONFIG_READY);
 	}
 }
 
-static void on_sub_state_connected_date_time_obt(struct data_msg_data *data_msg)
+static void on_all_states(struct data_msg_data *msg)
 {
-	if (is_app_mgr_event(&data_msg->manager.app.header) &&
-	    data_msg->manager.app.type == APP_MGR_EVT_UI_DATA_SEND) {
-		data_ui_send();
-	}
-}
-
-static void on_sub_state_date_time_obtained(struct data_msg_data *data_msg)
-{
-	if (is_app_mgr_event(&data_msg->manager.app.header)) {
-		switch (data_msg->manager.app.type) {
-		case APP_MGR_EVT_DATA_SEND:
-			data_send();
-			break;
-		case APP_MGR_EVT_UI_DATA_SEND:
-			data_ui_send();
-			break;
-		default:
-			break;
-		}
-	}
-}
-
-static void on_sub_state_date_time_not_obtained(struct data_msg_data *data_msg)
-{
-	if (is_modem_mgr_event(&data_msg->manager.modem.header) &&
-	    data_msg->manager.modem.type == MODEM_MGR_EVT_DATE_TIME_OBTAINED) {
-		data_sub_sub_state = DATA_MGR_SUB_SUB_STATE_TIME_OBTAINED;
-	}
-}
-
-static void on_state_sharing_data(struct data_msg_data *data_msg)
-{
-	if (is_cloud_mgr_event(&data_msg->manager.cloud.header) &&
-	    data_msg->manager.cloud.type == CLOUD_MGR_EVT_SHARED_DATA_DONE) {
-		data_state = DATA_MGR_STATE_NOT_SHARING_DATA;
-	}
-}
-
-static void on_state_not_sharing_data(struct data_msg_data *data_msg)
-{
-	if (is_data_mgr_event(&data_msg->manager.data.header) &&
-	    data_msg->manager.data.type == DATA_MGR_EVT_DATA_SEND) {
-		data_state = DATA_MGR_STATE_SHARING_DATA;
+	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
+		config_distribute(DATA_MGR_EVT_CONFIG_INIT);
 	}
 
-	if (is_app_mgr_event(&data_msg->manager.app.header) &&
-		data_msg->manager.app.type == APP_MGR_EVT_DATA_GET) {
-		data_list_set(data_msg->manager.app.data_list,
-			      data_msg->manager.app.count);
-
-		k_delayed_work_submit(&data_send_work,
-				      K_SECONDS(data_msg->manager.app.timeout));
-	}
-
-	if (is_modem_mgr_event(&data_msg->manager.modem.header)) {
-
-		switch (data_msg->manager.modem.type) {
-		case MODEM_MGR_EVT_MODEM_DATA_READY:
-			cloud_codec_populate_modem_buffer(
-					modem_buf,
-					&data_msg->manager.modem.data.modem,
-					&head_modem_buf);
-
-			data_status_set(APP_DATA_MODEM);
-			break;
-		case MODEM_MGR_EVT_BATTERY_DATA_READY:
-			cloud_codec_populate_bat_buffer(
-					bat_buf,
-					&data_msg->manager.modem.data.bat,
-					&head_bat_buf);
-
-			data_status_set(APP_DATA_BATTERY);
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (is_sensor_mgr_event(&data_msg->manager.sensor.header)) {
-
-		switch (data_msg->manager.sensor.type) {
-		case SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY:
-			cloud_codec_populate_sensor_buffer(
-				sensors_buf,
-				&data_msg->manager.sensor.data.sensors,
-				&head_sensor_buf);
-
-			data_status_set(APP_DATA_ENVIRONMENTALS);
-			break;
-		case SENSOR_MGR_EVT_MOVEMENT_DATA_READY:
-			cloud_codec_populate_accel_buffer(
-					accel_buf,
-					&data_msg->manager.sensor.data.accel,
-					&head_accel_buf);
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (is_ui_mgr_event(&data_msg->manager.ui.header)) {
-
-		switch (data_msg->manager.ui.type) {
-		case UI_MGR_EVT_BUTTON_DATA_READY:
-			cloud_codec_populate_ui_buffer(
-						ui_buf,
-						&data_msg->manager.ui.data.ui,
-						&head_ui_buf);
-
-			struct app_mgr_event *app_mgr_event =
-					new_app_mgr_event();
-
-			app_mgr_event->type = APP_MGR_EVT_UI_DATA_SEND;
-			EVENT_SUBMIT(app_mgr_event);
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (is_gps_mgr_event(&data_msg->manager.gps.header)) {
-
-		switch (data_msg->manager.gps.type) {
-		case GPS_MGR_EVT_DATA_READY:
-			cloud_codec_populate_gps_buffer(
-						gps_buf,
-						&data_msg->manager.gps.data.gps,
-						&head_gps_buf);
-
-			data_status_set(APP_DATA_GPS);
-			break;
-		case GPS_MGR_EVT_TIMEOUT:
-			data_status_set(APP_DATA_GPS);
-			break;
-		default:
-			break;
-		}
-	}
-}
-
-static void state_agnostic_manager_events(struct data_msg_data *data_msg)
-{
-	if (is_util_mgr_event(&data_msg->manager.util.header) &&
-	    data_msg->manager.util.type == UTIL_MGR_EVT_SHUTDOWN_REQUEST) {
-
+	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
 		struct data_mgr_event *data_mgr_event = new_data_mgr_event();
 
 		data_mgr_event->type = DATA_MGR_EVT_SHUTDOWN_READY;
+
+		/* The module doesn't have anything to shut down and can
+		 * report back immediately.
+		 */
 		EVENT_SUBMIT(data_mgr_event);
+	}
+
+	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
+		/* Store which data is requested by the app, later to be used
+		 * to confirm data is reported to the data manger.
+		 */
+		data_list_set(msg->manager.app.data_list,
+			      msg->manager.app.count);
+
+		/* Start countdown until data must have been received by the
+		 * data manager in order to be sent to cloud
+		 */
+		k_delayed_work_submit(&data_send_work,
+				      K_SECONDS(msg->manager.app.timeout));
+
+		return;
+	}
+
+	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_MODEM_DATA_READY)) {
+		cloud_codec_populate_modem_buffer(
+			modem_buf,
+			&msg->manager.modem.data.modem,
+			&head_modem_buf);
+
+		data_status_set(APP_DATA_MODEM);
+	}
+
+
+	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_BATTERY_DATA_READY)) {
+		cloud_codec_populate_bat_buffer(
+			bat_buf,
+			&msg->manager.modem.data.bat,
+			&head_bat_buf);
+
+		data_status_set(APP_DATA_BATTERY);
+	}
+
+	if (IS_EVENT(msg, sensor, SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY)){
+		cloud_codec_populate_sensor_buffer(
+			sensors_buf,
+			&msg->manager.sensor.data.sensors,
+			&head_sensor_buf);
+
+		data_status_set(APP_DATA_ENVIRONMENTALS);
+	}
+
+	if (IS_EVENT(msg, sensor, SENSOR_MGR_EVT_MOVEMENT_DATA_READY)) {
+		cloud_codec_populate_accel_buffer(
+			accel_buf,
+			&msg->manager.sensor.data.accel,
+			&head_accel_buf);
+}
+
+	if (IS_EVENT(msg, gps, GPS_MGR_EVT_DATA_READY)){
+		cloud_codec_populate_gps_buffer(
+			gps_buf,
+			&msg->manager.gps.data.gps,
+			&head_gps_buf);
+
+		data_status_set(APP_DATA_GNSS);
+	}
+
+	if (IS_EVENT(msg, gps, GPS_MGR_EVT_TIMEOUT)) {
+		data_status_set(APP_DATA_GNSS);
+	}
+
+
+	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_DATA_ACK)) {
+		pending_data_ack(msg->manager.cloud.data.ptr);
+		return;
 	}
 }
 
 static void data_manager(void)
 {
 	int err;
-	struct data_msg_data data_msg;
+	struct data_msg_data msg;
+
+	self.thread_id = k_current_get();
 
 	atomic_inc(&manager_count);
-
-	k_delayed_work_init(&data_send_work, data_send_work_fn);
 
 	err = data_manager_setup();
 	if (err) {
@@ -692,78 +761,30 @@ static void data_manager(void)
 		signal_error(err);
 	}
 
-	/* Start by sending the default configuration to the application. */
-	config_init();
+	state_set(STATE_DISCONNECTED);
 
 	while (true) {
-		k_msgq_get(&msgq_data, &data_msg, K_FOREVER);
+		module_get_next_msg(&self, &msg);
 
-		switch (data_state) {
-		case DATA_MGR_STATE_NOT_SHARING_DATA:
-			switch (data_sub_state) {
-			case DATA_MGR_SUB_STATE_DISCONNECTED:
-				on_state_disconnected(&data_msg);
-				break;
-			case DATA_MGR_SUB_STATE_CONNECTED:
-				switch (data_sub_sub_state) {
-				case DATA_MGR_SUB_SUB_STATE_TIME_OBTAINED:
-					on_sub_state_date_time_obtained(
-								&data_msg);
-					break;
-				case DATA_MGR_SUB_SUB_STATE_TIME_NOT_OBTAINED:
-					on_sub_state_date_time_not_obtained(
-								&data_msg);
-					break;
-				default:
-					LOG_WRN("Unknown sub-sub state.");
-					break;
-				}
-				on_state_connected(&data_msg);
-				break;
-			default:
-				LOG_WRN("Unknown sub state.");
-				break;
-			}
-			on_state_not_sharing_data(&data_msg);
+		switch (state) {
+		case STATE_DISCONNECTED:
+			on_state_disconnected(&msg);
 			break;
-		case DATA_MGR_STATE_SHARING_DATA:
-			switch (data_sub_state) {
-			case DATA_MGR_SUB_STATE_DISCONNECTED:
-				on_state_disconnected(&data_msg);
-				break;
-			case DATA_MGR_SUB_STATE_CONNECTED:
-				switch (data_sub_sub_state) {
-				case DATA_MGR_SUB_SUB_STATE_TIME_OBTAINED:
-					on_sub_state_connected_date_time_obt(
-								&data_msg);
-					break;
-				case DATA_MGR_SUB_SUB_STATE_TIME_NOT_OBTAINED:
-					on_sub_state_date_time_not_obtained(
-								&data_msg);
-					break;
-				default:
-					LOG_WRN("Unknown sub-sub state.");
-					break;
-				}
-				on_state_connected(&data_msg);
-				break;
-			default:
-				LOG_WRN("Unknown sub state.");
-				break;
-			}
-			on_state_sharing_data(&data_msg);
+		case STATE_CONNECTED:
+			on_state_connected(&msg);
 			break;
 		default:
-			LOG_WRN("Unknwon data manager state");
+			LOG_WRN("Unknown sub state.");
 			break;
 		}
-		state_agnostic_manager_events(&data_msg);
+
+		on_all_states(&msg);
 	}
 }
 
 K_THREAD_DEFINE(data_manager_thread, CONFIG_DATA_MGR_THREAD_STACK_SIZE,
 		data_manager, NULL, NULL, NULL,
-		K_HIGHEST_APPLICATION_THREAD_PRIO, 0, -1);
+		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 
 EVENT_LISTENER(MODULE, event_handler);
 EVENT_SUBSCRIBE(MODULE, app_mgr_event);

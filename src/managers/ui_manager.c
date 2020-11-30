@@ -11,8 +11,10 @@
 
 #define MODULE ui_manager
 
+#include "modules_common.h"
 #include "events/ui_mgr_event.h"
 #include "events/sensor_mgr_event.h"
+#include "events/app_mgr_event.h"
 #include "events/util_mgr_event.h"
 
 #include <logging/log.h>
@@ -23,19 +25,9 @@ extern atomic_t manager_count;
 struct ui_msg_data {
 	union {
 		struct util_mgr_event util;
+		struct app_mgr_event app;
 	} manager;
 };
-
-K_MSGQ_DEFINE(msgq_ui, sizeof(struct ui_msg_data), 10, 4);
-
-static void notify_ui_manager(struct ui_msg_data *data)
-{
-	while (k_msgq_put(&msgq_ui, data, K_NO_WAIT) != 0) {
-		/* message queue is full: purge old data & try again */
-		k_msgq_purge(&msgq_ui);
-		LOG_ERR("UI manager message queue full, queue purged");
-	}
-}
 
 static void signal_error(int err)
 {
@@ -108,54 +100,52 @@ static int ui_manager_setup(void)
 	return 0;
 }
 
-static bool event_handler(const struct event_header *eh)
+static void message_handler(struct ui_msg_data *msg)
 {
-	if (is_util_mgr_event(eh)) {
-		struct util_mgr_event *event = cast_util_mgr_event(eh);
-		struct ui_msg_data ui_msg = {
-			.manager.util = *event
-		};
+	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
+		int err;
+		atomic_inc(&manager_count);
 
-		notify_ui_manager(&ui_msg);
+		err = ui_manager_setup();
+		if (err) {
+			LOG_ERR("ui_manager_setup, error: %d", err);
+			signal_error(err);
+		}
 	}
 
-	return false;
-}
-
-static void state_agnostic_manager_events(struct ui_msg_data *ui_msg)
-{
-	if (is_util_mgr_event(&ui_msg->manager.util.header) &&
-	    ui_msg->manager.util.type == UTIL_MGR_EVT_SHUTDOWN_REQUEST) {
+	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
 		struct ui_mgr_event *ui_mgr_event = new_ui_mgr_event();
 
 		ui_mgr_event->type = UI_MGR_EVT_SHUTDOWN_READY;
 		EVENT_SUBMIT(ui_mgr_event);
 	}
+
+
 }
 
-static void ui_manager(void)
+static bool event_handler(const struct event_header *eh)
 {
-	int err;
+	if (is_app_mgr_event(eh)) {
+		struct app_mgr_event *event = cast_app_mgr_event(eh);
+		struct ui_msg_data msg = {
+			.manager.app = *event
+		};
 
-	struct ui_msg_data ui_msg;
-
-	atomic_inc(&manager_count);
-
-	err = ui_manager_setup();
-	if (err) {
-		LOG_ERR("ui_manager_setup, error: %d", err);
-		signal_error(err);
+		message_handler(&msg);
 	}
 
-	while (true) {
-		k_msgq_get(&msgq_ui, &ui_msg, K_FOREVER);
-		state_agnostic_manager_events(&ui_msg);
+	if (is_util_mgr_event(eh)) {
+		struct util_mgr_event *event = cast_util_mgr_event(eh);
+		struct ui_msg_data msg = {
+			.manager.util = *event
+		};
+
+		message_handler(&msg);
 	}
+
+	return false;
 }
-
-K_THREAD_DEFINE(ui_manager_thread, CONFIG_UI_MGR_THREAD_STACK_SIZE,
-		ui_manager, NULL, NULL, NULL,
-		K_HIGHEST_APPLICATION_THREAD_PRIO, 0, -1);
 
 EVENT_LISTENER(MODULE, event_handler);
 EVENT_SUBSCRIBE(MODULE, util_mgr_event);
+EVENT_SUBSCRIBE(MODULE, app_mgr_event);

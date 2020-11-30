@@ -13,6 +13,7 @@
 
 #define MODULE sensor_manager
 
+#include "modules_common.h"
 #include "events/app_mgr_event.h"
 #include "events/data_mgr_event.h"
 #include "events/sensor_mgr_event.h"
@@ -38,6 +39,10 @@ enum sensor_manager_state {
 } sensor_state;
 
 K_MSGQ_DEFINE(msgq_sensor, sizeof(struct sensor_msg_data), 10, 4);
+
+static struct module_data self = {
+	.msg_q = &msgq_sensor,
+};
 
 static void notify_sensor_manager(struct sensor_msg_data *data)
 {
@@ -189,11 +194,11 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
-static bool sensor_data_requested(struct app_mgr_event_data *data_list,
-				 size_t count)
+static bool sensor_data_requested(enum app_mgr_data_type *data_list,
+				  size_t count)
 {
-	for (int i = 0; i < count; i++) {
-		if (strcmp(data_list[i].buf, APP_DATA_ENVIRONMENTALS) == 0) {
+	for (size_t i = 0; i < count; i++) {
+		if (data_list[i] == APP_DATA_ENVIRONMENTALS) {
 			return true;
 		}
 	}
@@ -201,33 +206,30 @@ static bool sensor_data_requested(struct app_mgr_event_data *data_list,
 	return false;
 }
 
-static void on_state_init(struct sensor_msg_data *sensor_msg)
+static void on_state_init(struct sensor_msg_data *msg)
 {
-	if (is_data_mgr_event(&sensor_msg->manager.data.header) &&
-	    sensor_msg->manager.data.type == DATA_MGR_EVT_CONFIG_INIT) {
-
-		int movement_threshold = sensor_msg->manager.data.data.cfg.acct;
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_INIT)) {
+		int movement_threshold = msg->manager.data.data.cfg.acct;
 
 		ext_sensors_mov_thres_set(movement_threshold);
+
 		sensor_state = SENSOR_MGR_STATE_RUNNING;
 	}
 }
 
-static void on_state_running(struct sensor_msg_data *sensor_msg)
+static void on_state_running(struct sensor_msg_data *msg)
 {
-	if (is_data_mgr_event(&sensor_msg->manager.data.header) &&
-	    sensor_msg->manager.data.type == DATA_MGR_EVT_CONFIG_READY) {
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
 
-		int movement_threshold = sensor_msg->manager.data.data.cfg.acct;
+		int movement_threshold = msg->manager.data.data.cfg.acct;
 
 		ext_sensors_mov_thres_set(movement_threshold);
 	}
 
-	if (is_app_mgr_event(&sensor_msg->manager.app.header) &&
-	    sensor_msg->manager.app.type == APP_MGR_EVT_DATA_GET) {
+	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
 		if (!sensor_data_requested(
-			sensor_msg->manager.app.data_list,
-			sensor_msg->manager.app.count)) {
+			msg->manager.app.data_list,
+			msg->manager.app.count)) {
 			return;
 		}
 
@@ -241,10 +243,9 @@ static void on_state_running(struct sensor_msg_data *sensor_msg)
 	}
 }
 
-static void state_agnostic_manager_events(struct sensor_msg_data *sensor_msg)
+static void on_all_states(struct sensor_msg_data *msg)
 {
-	if (is_util_mgr_event(&sensor_msg->manager.util.header) &&
-	    sensor_msg->manager.util.type == UTIL_MGR_EVT_SHUTDOWN_REQUEST) {
+	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
 
 		struct sensor_mgr_event *sensor_evt = new_sensor_mgr_event();
 
@@ -257,7 +258,9 @@ static void sensor_manager(void)
 {
 	int err;
 
-	struct sensor_msg_data sensor_msg;
+	struct sensor_msg_data msg;
+
+	self.thread_id = k_current_get();
 
 	atomic_inc(&manager_count);
 
@@ -268,26 +271,27 @@ static void sensor_manager(void)
 	}
 
 	while (true) {
-		k_msgq_get(&msgq_sensor, &sensor_msg, K_FOREVER);
+		module_get_next_msg(&self, &msg);
 
 		switch (sensor_state) {
 		case SENSOR_MGR_STATE_INIT:
-			on_state_init(&sensor_msg);
+			on_state_init(&msg);
 			break;
 		case SENSOR_MGR_STATE_RUNNING:
-			on_state_running(&sensor_msg);
+			on_state_running(&msg);
 			break;
 		default:
 			LOG_WRN("Unknown sensor manager state.");
 			break;
 		}
-		state_agnostic_manager_events(&sensor_msg);
+
+		on_all_states(&msg);
 	}
 }
 
 K_THREAD_DEFINE(sensor_manager_thread, CONFIG_SENSOR_MGR_THREAD_STACK_SIZE,
 		sensor_manager, NULL, NULL, NULL,
-		K_HIGHEST_APPLICATION_THREAD_PRIO, 0, -1);
+		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 
 EVENT_LISTENER(MODULE, event_handler);
 EVENT_SUBSCRIBE(MODULE, app_mgr_event);

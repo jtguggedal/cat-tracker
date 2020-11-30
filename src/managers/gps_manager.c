@@ -15,6 +15,7 @@
 
 #define MODULE gps_manager
 
+#include "modules_common.h"
 #include "events/app_mgr_event.h"
 #include "events/gps_mgr_event.h"
 #include "events/data_mgr_event.h"
@@ -22,6 +23,11 @@
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+
+/* Maximum GPS interval value. Dummy value, will not be used. Starting
+ * and stopping of GPS is done by the application.
+ */
+#define GPS_INTERVAL_MAX 1800
 
 extern atomic_t manager_count;
 
@@ -35,31 +41,29 @@ struct gps_msg_data {
 };
 
 /* GPS manager super states. */
-enum gps_manager_state_type {
+static enum gps_manager_state_type {
 	GPS_MGR_STATE_INIT,
 	GPS_MGR_STATE_RUNNING
 } gps_state;
 
-enum gps_manager_sub_state_type {
+static enum gps_manager_sub_state_type {
 	GPS_MGR_SUB_STATE_IDLE,
 	GPS_MGR_SUB_STATE_SEARCH
 } gps_sub_state;
 
 K_MSGQ_DEFINE(msgq_gps, sizeof(struct gps_msg_data), 10, 4);
 
-static void notify_gps_manager(struct gps_msg_data *data)
+static void gps_manager(struct gps_msg_data *data);
+
+static void state_set(enum gps_manager_state_type new_state)
 {
-	while (k_msgq_put(&msgq_gps, data, K_NO_WAIT) != 0) {
-		/* message queue is full: purge old data & try again */
-		k_msgq_purge(&msgq_gps);
-		LOG_ERR("GPS manager message queue full, queue purged");
-	}
+	gps_state = new_state;
 }
 
-/* Maximum GPS interval value. Dummy value, will not be used. Starting
- * and stopping of GPS is done by the application.
- */
-#define GPS_INTERVAL_MAX 1800
+static void sub_state_set(enum gps_manager_sub_state_type new_state)
+{
+	gps_sub_state = new_state;
+}
 
 /* GPS device. Used to identify the GPS driver in the sensor API. */
 static const struct device *gps_dev;
@@ -81,12 +85,11 @@ static void signal_error(int err)
 	EVENT_SUBMIT(gps_mgr_event);
 }
 
-static void signal_gps_activity(bool active)
+static void signal_event(enum gps_mgr_event_type type)
 {
 	struct gps_mgr_event *gps_mgr_event = new_gps_mgr_event();
 
-	gps_mgr_event->type = active ? GPS_MGR_EVT_ACTIVE :
-				       GPS_MGR_EVT_INACTIVE;
+	gps_mgr_event->type = type;
 
 	EVENT_SUBMIT(gps_mgr_event);
 }
@@ -108,15 +111,6 @@ static void gps_manager_data_send(struct gps_pvt *gps_data)
 	EVENT_SUBMIT(gps_mgr_event);
 }
 
-static void gps_manager_gps_timeout(void)
-{
-	struct gps_mgr_event *gps_mgr_event = new_gps_mgr_event();
-
-	gps_mgr_event->type = GPS_MGR_EVT_TIMEOUT;
-
-	EVENT_SUBMIT(gps_mgr_event);
-}
-
 static void gps_manager_search_start(void)
 {
 	int err;
@@ -127,7 +121,7 @@ static void gps_manager_search_start(void)
 		return;
 	}
 
-	signal_gps_activity(true);
+	signal_event( GPS_MGR_EVT_ACTIVE);
 }
 
 static void gps_manager_search_stop(void)
@@ -140,7 +134,7 @@ static void gps_manager_search_stop(void)
 		return;
 	}
 
-	signal_gps_activity(false);
+	signal_event(GPS_MGR_EVT_INACTIVE);
 }
 
 static void gps_time_set(struct gps_pvt *gps_data)
@@ -171,7 +165,7 @@ static void gps_trigger_handler(const struct device *dev, struct gps_event *evt)
 		break;
 	case GPS_EVT_SEARCH_TIMEOUT:
 		LOG_DBG("GPS_EVT_SEARCH_TIMEOUT");
-		gps_manager_gps_timeout();
+		signal_event(GPS_MGR_EVT_TIMEOUT);
 		gps_manager_search_stop();
 		break;
 	case GPS_EVT_PVT:
@@ -235,48 +229,61 @@ static bool event_handler(const struct event_header *eh)
 {
 	if (is_app_mgr_event(eh)) {
 		struct app_mgr_event *event = cast_app_mgr_event(eh);
-		struct gps_msg_data gps_msg = {
+		struct gps_msg_data msg = {
 			.manager.app = *event
 		};
 
-		notify_gps_manager(&gps_msg);
+		if (IS_EVENT((&msg), app, APP_MGR_EVT_START)) {
+			int err;
+
+			atomic_inc(&manager_count);
+			state_set(GPS_MGR_STATE_INIT);
+
+			err = gps_manager_setup();
+			if (err) {
+				LOG_ERR("gps_manager_setup, error: %d", err);
+				signal_error(err);
+			}
+		}
+
+		gps_manager(&msg);
 	}
 
 	if (is_data_mgr_event(eh)) {
 		struct data_mgr_event *event = cast_data_mgr_event(eh);
-		struct gps_msg_data gps_msg = {
+		struct gps_msg_data msg = {
 			.manager.data = *event
 		};
 
-		notify_gps_manager(&gps_msg);
+		gps_manager(&msg);
 	}
 
 	if (is_util_mgr_event(eh)) {
 		struct util_mgr_event *event = cast_util_mgr_event(eh);
-		struct gps_msg_data gps_msg = {
+		struct gps_msg_data msg = {
 			.manager.util = *event
 		};
 
-		notify_gps_manager(&gps_msg);
+		gps_manager(&msg);
 	}
 
 	if (is_gps_mgr_event(eh)) {
 		struct gps_mgr_event *event = cast_gps_mgr_event(eh);
-		struct gps_msg_data gps_msg = {
+		struct gps_msg_data msg = {
 			.manager.gps = *event
 		};
 
-		notify_gps_manager(&gps_msg);
+		gps_manager(&msg);
 	}
 
 	return false;
 }
 
-static bool gps_data_requested(struct app_mgr_event_data *data_list,
+static bool gps_data_requested(enum app_mgr_data_type *data_list,
 			       size_t count)
 {
-	for (int i = 0; i < count; i++) {
-		if (strcmp(data_list[i].buf, APP_DATA_GPS) == 0) {
+	for (size_t i = 0; i < count; i++) {
+		if (data_list[i] == APP_DATA_GNSS) {
 			return true;
 		}
 	}
@@ -284,34 +291,30 @@ static bool gps_data_requested(struct app_mgr_event_data *data_list,
 	return false;
 }
 
-static void on_state_init(struct gps_msg_data *gps_msg)
+static void on_state_init(struct gps_msg_data *msg)
 {
-	if (is_data_mgr_event(&gps_msg->manager.data.header) &&
-		gps_msg->manager.data.type == DATA_MGR_EVT_CONFIG_INIT) {
-		gps_cfg.timeout = gps_msg->manager.data.data.cfg.gpst;
-		gps_state = GPS_MGR_STATE_RUNNING;
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_INIT)) {
+		gps_cfg.timeout = msg->manager.data.data.cfg.gpst;
+		state_set(GPS_MGR_STATE_RUNNING);
 	}
 }
 
-static void on_state_running(struct gps_msg_data *gps_msg)
+static void on_state_running(struct gps_msg_data *msg)
 {
-	if (is_data_mgr_event(&gps_msg->manager.data.header) &&
-		gps_msg->manager.data.type == DATA_MGR_EVT_CONFIG_READY) {
-		gps_cfg.timeout = gps_msg->manager.data.data.cfg.gpst;
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
+		gps_cfg.timeout = msg->manager.data.data.cfg.gpst;
 	}
 }
 
-static void on_state_running_gps_search(struct gps_msg_data *gps_msg)
+static void on_state_running_gps_search(struct gps_msg_data *msg)
 {
-	if (is_gps_mgr_event(&gps_msg->manager.gps.header) &&
-		gps_msg->manager.gps.type == GPS_MGR_EVT_INACTIVE) {
-		gps_sub_state = GPS_MGR_SUB_STATE_IDLE;
+	if (IS_EVENT(msg, gps, GPS_MGR_EVT_INACTIVE)) {
+		sub_state_set(GPS_MGR_SUB_STATE_IDLE);
 	}
 
-	if (is_app_mgr_event(&gps_msg->manager.app.header) &&
-		gps_msg->manager.app.type == APP_MGR_EVT_DATA_GET) {
-		if (!gps_data_requested(gps_msg->manager.app.data_list,
-					gps_msg->manager.app.count)) {
+	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
+		if (!gps_data_requested(msg->manager.app.data_list,
+					msg->manager.app.count)) {
 			return;
 		}
 
@@ -321,17 +324,15 @@ static void on_state_running_gps_search(struct gps_msg_data *gps_msg)
 	}
 }
 
-static void on_state_running_gps_idle(struct gps_msg_data *gps_msg)
+static void on_state_running_gps_idle(struct gps_msg_data *msg)
 {
-	if (is_gps_mgr_event(&gps_msg->manager.gps.header) &&
-		gps_msg->manager.gps.type == GPS_MGR_EVT_ACTIVE) {
-		gps_sub_state = GPS_MGR_SUB_STATE_SEARCH;
+	if (IS_EVENT(msg, gps, GPS_MGR_EVT_ACTIVE)) {
+		sub_state_set(GPS_MGR_SUB_STATE_SEARCH);
 	}
 
-	if (is_app_mgr_event(&gps_msg->manager.app.header) &&
-		gps_msg->manager.app.type == APP_MGR_EVT_DATA_GET) {
-		if (!gps_data_requested(gps_msg->manager.app.data_list,
-					gps_msg->manager.app.count)) {
+	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
+		if (!gps_data_requested(msg->manager.app.data_list,
+					msg->manager.app.count)) {
 			return;
 		}
 
@@ -339,11 +340,9 @@ static void on_state_running_gps_idle(struct gps_msg_data *gps_msg)
 	}
 }
 
-static void state_agnostic_manager_events(struct gps_msg_data *gps_msg)
+static void on_all_states(struct gps_msg_data *msg)
 {
-	if (is_util_mgr_event(&gps_msg->manager.util.header) &&
-	    gps_msg->manager.util.type == UTIL_MGR_EVT_SHUTDOWN_REQUEST) {
-
+	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
 		struct gps_mgr_event *gps_mgr_event = new_gps_mgr_event();
 
 		gps_mgr_event->type = GPS_MGR_EVT_SHUTDOWN_READY;
@@ -351,53 +350,34 @@ static void state_agnostic_manager_events(struct gps_msg_data *gps_msg)
 	}
 }
 
-static void gps_manager(void)
+static void gps_manager(struct gps_msg_data *msg)
 {
-	int err;
-
-	struct gps_msg_data gps_msg;
-
-	atomic_inc(&manager_count);
-
-	err = gps_manager_setup();
-	if (err) {
-		LOG_ERR("gps_manager_setup, error: %d", err);
-		signal_error(err);
-	}
-
-	while (true) {
-		k_msgq_get(&msgq_gps, &gps_msg, K_FOREVER);
-
-		switch (gps_state) {
-		case GPS_MGR_STATE_INIT:
-			on_state_init(&gps_msg);
+	switch (gps_state) {
+	case GPS_MGR_STATE_INIT:
+		on_state_init(msg);
+		break;
+	case GPS_MGR_STATE_RUNNING:
+		switch (gps_sub_state) {
+		case GPS_MGR_SUB_STATE_SEARCH:
+			on_state_running_gps_search(msg);
 			break;
-		case GPS_MGR_STATE_RUNNING:
-			switch (gps_sub_state) {
-			case GPS_MGR_SUB_STATE_SEARCH:
-				on_state_running_gps_search(&gps_msg);
-				break;
-			case GPS_MGR_SUB_STATE_IDLE:
-				on_state_running_gps_idle(&gps_msg);
-				break;
-			default:
-				LOG_ERR("Unknown GPS manager sub state.");
-				break;
-			}
-
-			on_state_running(&gps_msg);
+		case GPS_MGR_SUB_STATE_IDLE:
+			on_state_running_gps_idle(msg);
 			break;
 		default:
-			LOG_ERR("Unknown GPS manager state.");
+			LOG_ERR("Unknown GPS manager sub state.");
 			break;
 		}
-		state_agnostic_manager_events(&gps_msg);
-	}
-}
 
-K_THREAD_DEFINE(gps_manager_thread, CONFIG_GPS_MGR_THREAD_STACK_SIZE,
-		gps_manager, NULL, NULL, NULL,
-		K_HIGHEST_APPLICATION_THREAD_PRIO, 0, -1);
+		on_state_running(msg);
+		break;
+	default:
+		LOG_ERR("Unknown GPS manager state.");
+		break;
+	}
+
+	on_all_states(msg);
+}
 
 EVENT_LISTENER(MODULE, event_handler);
 EVENT_SUBSCRIBE(MODULE, app_mgr_event);

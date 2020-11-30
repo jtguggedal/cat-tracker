@@ -24,11 +24,14 @@ static int log_cloud_mgr_event(const struct event_header *eh, char *buf,
 	case CLOUD_MGR_EVT_CONNECTING:
 		strcpy(event_name, "CLOUD_MGR_EVT_CONNECTING");
 		break;
+	case CLOUD_MGR_EVT_CONNECTION_TIMEOUT:
+		strcpy(event_name, "CLOUD_MGR_EVT_CONNECTION_TIMEOUT");
+		break;
 	case CLOUD_MGR_EVT_CONFIG_RECEIVED:
 		strcpy(event_name, "CLOUD_MGR_EVT_CONFIG_RECEIVED");
 		break;
-	case CLOUD_MGR_EVT_SHARED_DATA_DONE:
-		strcpy(event_name, "CLOUD_MGR_EVT_SHARED_DATA_DONE");
+	case CLOUD_MGR_EVT_DATA_ACK:
+		strcpy(event_name, "CLOUD_MGR_EVT_DATA_ACK");
 		break;
 	case CLOUD_MGR_EVT_SHUTDOWN_READY:
 		strcpy(event_name, "CLOUD_MGR_SHUTDOWN_READY");

@@ -11,6 +11,7 @@
 
 #define MODULE util_manager
 
+#include "modules_common.h"
 #include "events/app_mgr_event.h"
 #include "events/cloud_mgr_event.h"
 #include "events/data_mgr_event.h"
@@ -29,6 +30,18 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
  */
 atomic_t manager_count;
 
+/* Util manager states. */
+static enum util_state {
+	STATE_INIT,
+	STATE_REBOOT_PENDING
+} state;
+
+
+static void state_set(enum util_state new_state)
+{
+	state = new_state;
+}
+
 struct util_msg_data {
 	union {
 		struct cloud_mgr_event cloud;
@@ -42,18 +55,9 @@ struct util_msg_data {
 	} manager;
 };
 
+static void message_handler(struct util_msg_data *msg);
+
 static struct k_delayed_work reboot_work;
-
-K_MSGQ_DEFINE(msgq_util, sizeof(struct util_msg_data), 10, 4);
-
-static void notify_util_manager(struct util_msg_data *data)
-{
-	while (k_msgq_put(&msgq_util, data, K_NO_WAIT) != 0) {
-		/* message queue is full: purge old data & try again */
-		k_msgq_purge(&msgq_util);
-		LOG_ERR("Utility manager message queue full, queue purged");
-	}
-}
 
 static void reboot(void)
 {
@@ -115,7 +119,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.modem = *event
 		};
 
-		notify_util_manager(&util_msg);
+		message_handler(&util_msg);
 	}
 
 	if (is_cloud_mgr_event(eh)) {
@@ -124,7 +128,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.cloud = *event
 		};
 
-		notify_util_manager(&util_msg);
+		message_handler(&util_msg);
 	}
 
 	if (is_gps_mgr_event(eh)) {
@@ -133,7 +137,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.gps = *event
 		};
 
-		notify_util_manager(&util_msg);
+		message_handler(&util_msg);
 	}
 
 	if (is_sensor_mgr_event(eh)) {
@@ -142,7 +146,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.sensor = *event
 		};
 
-		notify_util_manager(&util_msg);
+		message_handler(&util_msg);
 	}
 
 	if (is_ui_mgr_event(eh)) {
@@ -151,7 +155,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.ui = *event
 		};
 
-		notify_util_manager(&util_msg);
+		message_handler(&util_msg);
 	}
 
 	if (is_app_mgr_event(eh)) {
@@ -160,7 +164,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.app = *event
 		};
 
-		notify_util_manager(&util_msg);
+		message_handler(&util_msg);
 	}
 
 	if (is_data_mgr_event(eh)) {
@@ -169,7 +173,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.data = *event
 		};
 
-		notify_util_manager(&util_msg);
+		message_handler(&util_msg);
 	}
 
 	if (is_output_mgr_event(eh)) {
@@ -178,21 +182,19 @@ static bool event_handler(const struct event_header *eh)
 			.manager.output = *event
 		};
 
-		notify_util_manager(&util_msg);
+		message_handler(&util_msg);
 	}
 
 	return false;
 }
 
-static void state_agnostic_manager_events(struct util_msg_data *util_msg)
+static void state_agnostic_manager_events(struct util_msg_data *msg)
 {
 	static int reboot_ack_cnt;
 
-	if (is_cloud_mgr_event(&util_msg->manager.cloud.header)) {
-		switch (util_msg->manager.cloud.type) {
-		case CLOUD_MGR_EVT_ERROR:
-			signal_reboot_request();
-			break;
+	if (is_cloud_mgr_event(&msg->manager.cloud.header)) {
+		switch (msg->manager.cloud.type) {
+		case CLOUD_MGR_EVT_ERROR: /* Fall-through */
 		case CLOUD_MGR_EVT_FOTA_DONE:
 			signal_reboot_request();
 			break;
@@ -204,8 +206,12 @@ static void state_agnostic_manager_events(struct util_msg_data *util_msg)
 		}
 	}
 
-	if (is_modem_mgr_event(&util_msg->manager.modem.header)) {
-		switch (util_msg->manager.modem.type) {
+	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_ERROR)) {
+
+	}
+
+	if (is_modem_mgr_event(&msg->manager.modem.header)) {
+		switch (msg->manager.modem.type) {
 		case MODEM_MGR_EVT_ERROR:
 			signal_reboot_request();
 			break;
@@ -217,8 +223,8 @@ static void state_agnostic_manager_events(struct util_msg_data *util_msg)
 		}
 	}
 
-	if (is_sensor_mgr_event(&util_msg->manager.sensor.header)) {
-		switch (util_msg->manager.sensor.type) {
+	if (is_sensor_mgr_event(&msg->manager.sensor.header)) {
+		switch (msg->manager.sensor.type) {
 		case SENSOR_MGR_EVT_ERROR:
 			signal_reboot_request();
 			break;
@@ -230,8 +236,8 @@ static void state_agnostic_manager_events(struct util_msg_data *util_msg)
 		}
 	}
 
-	if (is_gps_mgr_event(&util_msg->manager.gps.header)) {
-		switch (util_msg->manager.gps.type) {
+	if (is_gps_mgr_event(&msg->manager.gps.header)) {
+		switch (msg->manager.gps.type) {
 		case GPS_MGR_EVT_ERROR:
 			signal_reboot_request();
 			break;
@@ -243,8 +249,8 @@ static void state_agnostic_manager_events(struct util_msg_data *util_msg)
 		}
 	}
 
-	if (is_data_mgr_event(&util_msg->manager.data.header)) {
-		switch (util_msg->manager.data.type) {
+	if (is_data_mgr_event(&msg->manager.data.header)) {
+		switch (msg->manager.data.type) {
 		case DATA_MGR_EVT_ERROR:
 			signal_reboot_request();
 			break;
@@ -256,8 +262,8 @@ static void state_agnostic_manager_events(struct util_msg_data *util_msg)
 		}
 	}
 
-	if (is_app_mgr_event(&util_msg->manager.app.header)) {
-		switch (util_msg->manager.app.type) {
+	if (is_app_mgr_event(&msg->manager.app.header)) {
+		switch (msg->manager.app.type) {
 		case APP_MGR_EVT_ERROR:
 			signal_reboot_request();
 			break;
@@ -269,8 +275,8 @@ static void state_agnostic_manager_events(struct util_msg_data *util_msg)
 		}
 	}
 
-	if (is_ui_mgr_event(&util_msg->manager.ui.header)) {
-		switch (util_msg->manager.ui.type) {
+	if (is_ui_mgr_event(&msg->manager.ui.header)) {
+		switch (msg->manager.ui.type) {
 		case UI_MGR_EVT_ERROR:
 			signal_reboot_request();
 			break;
@@ -282,8 +288,8 @@ static void state_agnostic_manager_events(struct util_msg_data *util_msg)
 		}
 	}
 
-	if (is_output_mgr_event(&util_msg->manager.output.header)) {
-		switch (util_msg->manager.output.type) {
+	if (is_output_mgr_event(&msg->manager.output.header)) {
+		switch (msg->manager.output.type) {
 		case OUTPUT_MGR_EVT_ERROR:
 			signal_reboot_request();
 			break;
@@ -301,26 +307,20 @@ static void state_agnostic_manager_events(struct util_msg_data *util_msg)
 	 */
 	if (reboot_ack_cnt >= manager_count) {
 		k_delayed_work_submit(&reboot_work,
-				      K_SECONDS(5));
+				      K_SECONDS(50));
 	}
 }
 
-static void util_manager(void)
+static void message_handler(struct util_msg_data *msg)
 {
-	struct util_msg_data util_msg;
-
-	k_delayed_work_init(&reboot_work, reboot_work_fn);
-
-	/* State agnostic manager. */
-	while (true) {
-		k_msgq_get(&msgq_util, &util_msg, K_FOREVER);
-		state_agnostic_manager_events(&util_msg);
+	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
+		state_set(STATE_INIT);
+		k_delayed_work_init(&reboot_work, reboot_work_fn);
 	}
-}
 
-K_THREAD_DEFINE(util_manager_thread, CONFIG_UTIL_MGR_THREAD_STACK_SIZE,
-		util_manager, NULL, NULL, NULL,
-		K_HIGHEST_APPLICATION_THREAD_PRIO, 0, -1);
+
+	state_agnostic_manager_events(msg);
+}
 
 EVENT_LISTENER(MODULE, event_handler);
 EVENT_SUBSCRIBE_EARLY(MODULE, app_mgr_event);

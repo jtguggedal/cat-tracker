@@ -21,7 +21,7 @@ extern "C" {
 #endif
 
 /** @brief Modem event types submitted by Modem manager. */
-enum modem_mgr_event_types {
+enum modem_mgr_event_type {
 	MODEM_MGR_EVT_LTE_CONNECTED,
 	MODEM_MGR_EVT_LTE_DISCONNECTED,
 	MODEM_MGR_EVT_LTE_CONNECTING,
@@ -35,7 +35,7 @@ enum modem_mgr_event_types {
 /** @brief Modem event. */
 struct modem_mgr_event {
 	struct event_header header;
-	enum modem_mgr_event_types type;
+	enum modem_mgr_event_type type;
 	union {
 		struct cloud_data_modem modem;
 		struct cloud_data_battery bat;

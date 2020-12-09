@@ -103,15 +103,6 @@ static void signal_error(int err)
 	EVENT_SUBMIT(app_mgr_event);
 }
 
-static void config_get(void)
-{
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-	app_mgr_event->type = APP_MGR_EVT_CONFIG_GET;
-
-	EVENT_SUBMIT(app_mgr_event);
-}
-
 static void config_send(void)
 {
 	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
@@ -179,6 +170,15 @@ static bool event_handler(const struct event_header *eh)
 		struct cloud_mgr_event *event = cast_cloud_mgr_event(eh);
 		struct app_msg_data app_msg = {
 			.manager.cloud = *event
+		};
+
+		module_enqueue_msg(&self, &app_msg);
+	}
+
+	if (is_app_mgr_event(eh)) {
+		struct app_mgr_event *event = cast_app_mgr_event(eh);
+		struct app_msg_data app_msg = {
+			.manager.app = *event
 		};
 
 		module_enqueue_msg(&self, &app_msg);
@@ -337,8 +337,11 @@ static void on_sub_state_active(struct app_msg_data *msg)
 
 static void on_state_running(struct app_msg_data *msg)
 {
+	/* Always send the device configuration upon a
+	 * established connection to cloud.
+	 */
 	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
-		config_get();
+		config_send();
 	}
 
 	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_DATE_TIME_OBTAINED)) {
@@ -429,6 +432,7 @@ void main(void)
 }
 
 EVENT_LISTENER(MODULE, event_handler);
+EVENT_SUBSCRIBE(MODULE, app_mgr_event);
 EVENT_SUBSCRIBE(MODULE, data_mgr_event);
 EVENT_SUBSCRIBE(MODULE, util_mgr_event);
 EVENT_SUBSCRIBE_EARLY(MODULE, cloud_mgr_event);

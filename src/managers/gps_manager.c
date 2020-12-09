@@ -115,6 +115,12 @@ static void gps_manager_search_start(void)
 {
 	int err;
 
+	/* Do not initiate GPS search if timeout is 0. */
+	if (gps_cfg.timeout == 0) {
+		LOG_WRN("GPS search disabled");
+		return;
+	}
+
 	err = gps_start(gps_dev, &gps_cfg);
 	if (err) {
 		LOG_WRN("Failed to start GPS, error: %d", err);

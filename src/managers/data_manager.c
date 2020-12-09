@@ -348,7 +348,7 @@ static void cloud_manager_config_get(void)
 	EVENT_SUBMIT(evt);
 }
 
-static void cloud_manager_config_send(struct data_mgr_event *data)
+static void cloud_manager_config_send(void)
 {
 	int err;
 	struct cloud_codec_data codec;
@@ -356,7 +356,7 @@ static void cloud_manager_config_send(struct data_mgr_event *data)
 
 	evt->type = DATA_MGR_EVT_DATA_SEND;
 
-	err = cloud_codec_encode_cfg_data(&codec, &data->data.cfg);
+	err = cloud_codec_encode_cfg_data(&codec, &current_cfg);
 	if (err) {
 		LOG_ERR("Error encoding configuration, error: %d", err);
 		signal_error(err);
@@ -588,7 +588,7 @@ static void on_state_connected(struct data_msg_data *msg)
 	 */
 	if (IS_EVENT(msg, app, APP_MGR_EVT_CONFIG_SEND)) {
 		config_distribute(DATA_MGR_EVT_CONFIG_SEND);
-		cloud_manager_config_send(&msg->manager.data);
+		cloud_manager_config_send();
 		return;
 	}
 

@@ -25,6 +25,9 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
+BUILD_ASSERT(!IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT),
+		"The modem manager does not support this configuration");
+
 extern atomic_t manager_count;
 
 struct modem_msg_data {
@@ -32,8 +35,52 @@ struct modem_msg_data {
 		struct app_mgr_event app;
 		struct cloud_mgr_event cloud;
 		struct util_mgr_event util;
+		struct modem_mgr_event modem;
 	} manager;
 };
+
+/* Modem manager connection states. */
+static enum connection_state {
+	LTE_STATE_DISCONNECTED,
+	LTE_STATE_CONNECTING,
+	LTE_STATE_CONNECTED,
+	LTE_STATE_SHUTTING_DOWN,
+} connection_state;
+
+/* Forward declarations. */
+static void message_handler(struct modem_msg_data *msg);
+
+/* Convenience function that translates enumerator states to strings. */
+static char *state2str(enum connection_state state)
+{
+	switch (state) {
+	case LTE_STATE_DISCONNECTED:
+		return "LTE_STATE_DISCONNECTED";
+	case LTE_STATE_CONNECTING:
+		return "LTE_STATE_CONNECTING";
+	case LTE_STATE_CONNECTED:
+		return "LTE_STATE_CONNECTED";
+	case LTE_STATE_SHUTTING_DOWN:
+		return "LTE_STATE_SHUTTING_DOWN";
+	default:
+		return "Unknown state";
+	}
+}
+
+/* Function to set the internal connection state of the modem manager. */
+static void connection_state_set(enum connection_state new_state)
+{
+	if (new_state == connection_state) {
+		LOG_DBG("State: %s", log_strdup(state2str(connection_state)));
+		return;
+	}
+
+	LOG_DBG("State transition %s --> %s",
+		log_strdup(state2str(connection_state)),
+		log_strdup(state2str(new_state)));
+
+	connection_state = new_state;
+}
 
 /* Struct that holds data from the modem information module. */
 static struct modem_param_info modem_param;
@@ -41,9 +88,52 @@ static struct modem_param_info modem_param;
 /* Value that always holds the latest RSRP value. */
 static uint16_t rsrp_value_latest;
 
-static void message_handler(struct modem_msg_data *msg);
 
-K_MSGQ_DEFINE(msgq_modem, sizeof(struct modem_msg_data), 10, 4);
+/* Event manager handler */
+
+static bool event_handler(const struct event_header *eh)
+{
+	if (is_modem_mgr_event(eh)) {
+		struct modem_mgr_event *event = cast_modem_mgr_event(eh);
+		struct modem_msg_data modem_msg = {
+			.manager.modem = *event
+		};
+
+		message_handler(&modem_msg);
+	}
+
+	if (is_app_mgr_event(eh)) {
+		struct app_mgr_event *event = cast_app_mgr_event(eh);
+		struct modem_msg_data modem_msg = {
+			.manager.app = *event
+		};
+
+		message_handler(&modem_msg);
+	}
+
+	if (is_cloud_mgr_event(eh)) {
+		struct cloud_mgr_event *event = cast_cloud_mgr_event(eh);
+		struct modem_msg_data modem_msg = {
+			.manager.cloud = *event
+		};
+
+		message_handler(&modem_msg);
+	}
+
+	if (is_util_mgr_event(eh)) {
+		struct util_mgr_event *event = cast_util_mgr_event(eh);
+		struct modem_msg_data modem_msg = {
+			.manager.util = *event
+		};
+
+		message_handler(&modem_msg);
+	}
+
+	return false;
+}
+
+
+/* Convenience functions for event signaling */
 
 static void signal_error(int err)
 {
@@ -64,11 +154,49 @@ static void signal_event(enum modem_mgr_event_type type)
 	EVENT_SUBMIT(modem_mgr_event);
 }
 
+static void signal_cell_update(uint32_t cell_id, uint32_t tac)
+{
+	struct modem_mgr_event *evt = new_modem_mgr_event();
+
+	evt->type = MODEM_MGR_EVT_LTE_CELL_UPDATE;
+	evt->data.cell.cell_id = cell_id;
+	evt->data.cell.tac = tac;
+
+	EVENT_SUBMIT(evt);
+}
+
+static void signal_psm_update(int tau, int active_time)
+{
+	struct modem_mgr_event *evt = new_modem_mgr_event();
+
+	evt->type = MODEM_MGR_EVT_LTE_PSM_UPDATE;
+	evt->data.psm.tau = tau;
+	evt->data.psm.active_time = active_time;
+
+	EVENT_SUBMIT(evt);
+}
+
+static void signal_edrx_update(float edrx, float ptw)
+{
+	struct modem_mgr_event *evt = new_modem_mgr_event();
+
+	evt->type = MODEM_MGR_EVT_LTE_EDRX_UPDATE;
+	evt->data.edrx.edrx = edrx;
+	evt->data.edrx.ptw = ptw;
+
+	EVENT_SUBMIT(evt);
+}
+
+
+/* Date and time control */
+
 static void date_time_mgr_event_handler(const struct date_time_evt *evt)
 {
 	switch (evt->type) {
-	case DATE_TIME_OBTAINED_MODEM: /* Fall through. */
-	case DATE_TIME_OBTAINED_NTP: /* Fall through. */
+	case DATE_TIME_OBTAINED_MODEM:
+		/* Fall through. */
+	case DATE_TIME_OBTAINED_NTP:
+		/* Fall through. */
 	case DATE_TIME_OBTAINED_EXT:
 		signal_event(MODEM_MGR_EVT_DATE_TIME_OBTAINED);
 
@@ -84,87 +212,8 @@ static void date_time_mgr_event_handler(const struct date_time_evt *evt)
 	}
 }
 
-static void lte_evt_handler(const struct lte_lc_evt *const evt)
-{
-	switch (evt->type) {
-	case LTE_LC_EVT_NW_REG_STATUS:
-		if (evt->nw_reg_status == LTE_LC_NW_REG_UICC_FAIL) {
-			LOG_ERR("No SIM card detected!");
-			signal_error(-ENOTSUP);
-			break;
-		}
 
-		if ((evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_HOME) &&
-		    (evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_ROAMING)) {
-			signal_event(MODEM_MGR_EVT_LTE_DISCONNECTED);
-			break;
-		}
-
-		LOG_DBG("Network registration status: %s",
-			evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
-			"Connected - home network" : "Connected - roaming");
-
-		signal_event(MODEM_MGR_EVT_LTE_CONNECTED);
-		break;
-	case LTE_LC_EVT_PSM_UPDATE:
-		LOG_DBG("PSM parameter update: TAU: %d, Active time: %d",
-			evt->psm_cfg.tau, evt->psm_cfg.active_time);
-		break;
-	case LTE_LC_EVT_EDRX_UPDATE: {
-		char log_buf[60];
-		ssize_t len;
-
-		len = snprintf(log_buf, sizeof(log_buf),
-			       "eDRX parameter update: eDRX: %f, PTW: %f",
-			       evt->edrx_cfg.edrx, evt->edrx_cfg.ptw);
-		if (len > 0) {
-			LOG_DBG("%s", log_strdup(log_buf));
-		}
-		break;
-	}
-	case LTE_LC_EVT_RRC_UPDATE:
-		LOG_DBG("RRC mode: %s",
-			evt->rrc_mode == LTE_LC_RRC_MODE_CONNECTED ?
-			"Connected" : "Idle");
-		break;
-	case LTE_LC_EVT_CELL_UPDATE:
-		LOG_DBG("LTE cell changed: Cell ID: %d, Tracking area: %d",
-			evt->cell.id, evt->cell.tac);
-		break;
-	default:
-		break;
-	}
-}
-
-static int modem_configure_low_power(void)
-{
-	int err;
-
-	err = lte_lc_psm_req(true);
-	if (err) {
-		LOG_ERR("PSM request failed, error: %d", err);
-	}
-
-	LOG_DBG("PSM requested");
-
-	return 0;
-}
-
-static int modem_configure(void)
-{
-	int err;
-
-	LOG_DBG("Configuring the modem...");
-
-	err = lte_lc_init_and_connect_async(lte_evt_handler);
-	if (err) {
-		LOG_ERR("lte_lc_init_connect_async, error: %d", err);
-	}
-
-	signal_event(MODEM_MGR_EVT_LTE_CONNECTING);
-
-	return err;
-}
+/* Modem info handling */
 
 static void modem_rsrp_handler(char rsrp_value)
 {
@@ -280,6 +329,30 @@ static int modem_manager_modem_data_get(void)
 	return 0;
 }
 
+static bool modem_data_requested(enum app_mgr_data_type *data_list,
+				size_t count)
+{
+	for (size_t i = 0; i < count; i++) {
+		if (data_list[i] == APP_DATA_MODEM) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool battery_data_requested(enum app_mgr_data_type *data_list,
+				   size_t count)
+{
+	for (size_t i = 0; i < count; i++) {
+		if (data_list[i] == APP_DATA_BATTERY) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static int modem_manager_battery_data_get(void)
 {
 	int err;
@@ -305,21 +378,112 @@ static int modem_manager_battery_data_get(void)
 	return 0;
 }
 
+
+/* LTE configuration and handling */
+
+static void lte_evt_handler(const struct lte_lc_evt *const evt)
+{
+	switch (evt->type) {
+	case LTE_LC_EVT_NW_REG_STATUS:
+		if (evt->nw_reg_status == LTE_LC_NW_REG_UICC_FAIL) {
+			LOG_ERR("No SIM card detected!");
+			signal_error(-ENOTSUP);
+			break;
+		}
+
+		if ((evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_HOME) &&
+		    (evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_ROAMING)) {
+			signal_event(MODEM_MGR_EVT_LTE_DISCONNECTED);
+			break;
+		}
+
+		LOG_DBG("Network registration status: %s",
+			evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
+			"Connected - home network" : "Connected - roaming");
+
+		signal_event(MODEM_MGR_EVT_LTE_CONNECTED);
+		break;
+	case LTE_LC_EVT_PSM_UPDATE:
+		LOG_DBG("PSM parameter update: TAU: %d, Active time: %d",
+			evt->psm_cfg.tau, evt->psm_cfg.active_time);
+		signal_psm_update(evt->psm_cfg.tau, evt->psm_cfg.active_time);
+		break;
+	case LTE_LC_EVT_EDRX_UPDATE: {
+		char log_buf[60];
+		ssize_t len;
+
+		len = snprintf(log_buf, sizeof(log_buf),
+			       "eDRX parameter update: eDRX: %f, PTW: %f",
+			       evt->edrx_cfg.edrx, evt->edrx_cfg.ptw);
+		if (len > 0) {
+			LOG_DBG("%s", log_strdup(log_buf));
+		}
+
+		signal_edrx_update(evt->edrx_cfg.edrx, evt->edrx_cfg.ptw);
+		break;
+	}
+	case LTE_LC_EVT_RRC_UPDATE:
+		LOG_DBG("RRC mode: %s",
+			evt->rrc_mode == LTE_LC_RRC_MODE_CONNECTED ?
+			"Connected" : "Idle");
+		break;
+	case LTE_LC_EVT_CELL_UPDATE:
+		LOG_DBG("LTE cell changed: Cell ID: %d, Tracking area: %d",
+			evt->cell.id, evt->cell.tac);
+		signal_cell_update(evt->cell.id, evt->cell.tac);
+		break;
+	default:
+		break;
+	}
+}
+
+static int modem_configure_low_power(void)
+{
+	int err;
+
+	err = lte_lc_psm_req(true);
+	if (err) {
+		LOG_ERR("lte_lc_psm_req, error: %d", err);
+		return err;
+	}
+
+	LOG_DBG("PSM requested");
+
+	return 0;
+}
+
+static int lte_connect(void)
+{
+	int err;
+
+	err = lte_lc_connect_async(lte_evt_handler);
+	if (err) {
+		LOG_ERR("lte_lc_connect_async, error: %d", err);
+
+		return err;
+	}
+
+	signal_event(MODEM_MGR_EVT_LTE_CONNECTING);
+
+	return 0;
+}
+
 static int modem_setup(void)
 {
 	int err;
 
-	// This must be configurable
-	err = modem_configure_low_power();
+	err = lte_lc_init();
 	if (err) {
-		LOG_ERR("modem_configure_low_power, error: %d", err);
+		LOG_ERR("lte_lc_init, error: %d", err);
 		return err;
 	}
 
-	err = modem_configure();
-	if (err) {
-		LOG_ERR("modem_configure, error: %d", err);
-		return err;
+	if (IS_ENABLED(CONFIG_MODEM_MGR_AUTO_REQUEST_POWER_SAVING_FEATURES)) {
+		err = modem_configure_low_power();
+		if (err) {
+			LOG_ERR("modem_configure_low_power, error: %d", err);
+			return err;
+		}
 	}
 
 	err = modem_data_init();
@@ -331,73 +495,75 @@ static int modem_setup(void)
 	return 0;
 }
 
-static bool event_handler(const struct event_header *eh)
+
+/* Message handlers for each state */
+
+static void on_lte_state_disconnected(struct modem_msg_data *msg)
 {
-	if (is_app_mgr_event(eh)) {
-		struct app_mgr_event *event = cast_app_mgr_event(eh);
-		struct modem_msg_data modem_msg = {
-			.manager.app = *event
-		};
-
-		message_handler(&modem_msg);
+	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_LTE_CONNECTED)) {
+		connection_state_set(LTE_STATE_CONNECTED);
 	}
 
-	if (is_cloud_mgr_event(eh)) {
-		struct cloud_mgr_event *event = cast_cloud_mgr_event(eh);
-		struct modem_msg_data modem_msg = {
-			.manager.cloud = *event
-		};
-
-		message_handler(&modem_msg);
+	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_LTE_CONNECTING)) {
+		connection_state_set(LTE_STATE_CONNECTING);
 	}
 
-	if (is_util_mgr_event(eh)) {
-		struct util_mgr_event *event = cast_util_mgr_event(eh);
-		struct modem_msg_data modem_msg = {
-			.manager.util = *event
-		};
-
-		message_handler(&modem_msg);
+	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
+		date_time_update_async(date_time_mgr_event_handler);
 	}
-
-	return false;
 }
 
-static bool modem_data_requested(enum app_mgr_data_type *data_list,
-				size_t count)
+static void on_lte_state_connecting(struct modem_msg_data *msg)
 {
-	for (size_t i = 0; i < count; i++) {
-		if (data_list[i] == APP_DATA_MODEM) {
-			return true;
+	if (IS_EVENT(msg, app, APP_MGR_EVT_LTE_DISCONNECT)) {
+		int err;
+
+		err = lte_lc_offline();
+		if (err) {
+			LOG_ERR("LTE disconnect failed, error: %d", err);
+			signal_error(err);
+			return;
 		}
+
+		connection_state_set(LTE_STATE_DISCONNECTED);
 	}
 
-	return false;
+	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_LTE_CONNECTED)) {
+		connection_state_set(LTE_STATE_CONNECTED);
+	}
 }
 
-static bool battery_data_requested(enum app_mgr_data_type *data_list,
-				   size_t count)
+static void on_lte_state_connected(struct modem_msg_data *msg)
 {
-	for (size_t i = 0; i < count; i++) {
-		if (data_list[i] == APP_DATA_BATTERY) {
-			return true;
-		}
+	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_LTE_DISCONNECTED)) {
+		connection_state_set(LTE_STATE_DISCONNECTED);
 	}
 
-	return false;
+	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
+		date_time_update_async(date_time_mgr_event_handler);
+	}
 }
 
-static void message_handler(struct modem_msg_data *msg)
+static void on_all_states(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
 		int err;
 
 		atomic_inc(&manager_count);
+		connection_state_set(LTE_STATE_DISCONNECTED);
 
 		err = modem_setup();
 		if (err) {
-			LOG_ERR("modem_setup, error: %d", err);
+			LOG_ERR("Failed setting up the modem, error: %d", err);
 			signal_error(err);
+			return;
+		}
+
+		err = lte_connect();
+		if (err) {
+			LOG_ERR("Failed connecting to LTE, error: %d", err);
+			signal_error(err);
+			return;
 		}
 	}
 
@@ -425,12 +591,9 @@ static void message_handler(struct modem_msg_data *msg)
 		}
 	}
 
-	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
-		date_time_update_async(date_time_mgr_event_handler);
-	}
-
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
 		lte_lc_power_off();
+		connection_state_set(LTE_STATE_SHUTTING_DOWN);
 
 		struct modem_mgr_event *modem_mgr_event = new_modem_mgr_event();
 
@@ -439,7 +602,31 @@ static void message_handler(struct modem_msg_data *msg)
 	}
 }
 
+static void message_handler(struct modem_msg_data *msg)
+{
+	switch (connection_state) {
+	case LTE_STATE_DISCONNECTED:
+		on_lte_state_disconnected(msg);
+		break;
+	case LTE_STATE_CONNECTING:
+		on_lte_state_connecting(msg);
+		break;
+	case LTE_STATE_CONNECTED:
+		on_lte_state_connected(msg);
+		break;
+	case LTE_STATE_SHUTTING_DOWN:
+		LOG_WRN("No action allowed in LTE_STATE_SHUTTING_DOWN");
+		break;
+	default:
+		LOG_WRN("Invalid state: %d", connection_state);
+		break;
+	}
+
+	on_all_states(msg);
+}
+
 EVENT_LISTENER(MODULE, event_handler);
+EVENT_SUBSCRIBE_EARLY(MODULE, modem_mgr_event);
 EVENT_SUBSCRIBE(MODULE, app_mgr_event);
 EVENT_SUBSCRIBE(MODULE, cloud_mgr_event);
 EVENT_SUBSCRIBE_FINAL(MODULE, util_mgr_event);

@@ -23,6 +23,8 @@ extern "C" {
 /** @brief Application event types submitted by Application manager. */
 enum app_mgr_event_type {
 	APP_MGR_EVT_START,
+	APP_MGR_EVT_LTE_CONNECT,
+	APP_MGR_EVT_LTE_DISCONNECT,
 	APP_MGR_EVT_DATA_GET,
 	APP_MGR_EVT_DATA_GET_ALL,
 	APP_MGR_EVT_CONFIG_GET,

@@ -25,11 +25,38 @@ enum modem_mgr_event_type {
 	MODEM_MGR_EVT_LTE_CONNECTED,
 	MODEM_MGR_EVT_LTE_DISCONNECTED,
 	MODEM_MGR_EVT_LTE_CONNECTING,
+	MODEM_MGR_EVT_LTE_CELL_UPDATE,
+	MODEM_MGR_EVT_LTE_PSM_UPDATE,
+	MODEM_MGR_EVT_LTE_EDRX_UPDATE,
 	MODEM_MGR_EVT_MODEM_DATA_READY,
 	MODEM_MGR_EVT_BATTERY_DATA_READY,
 	MODEM_MGR_EVT_DATE_TIME_OBTAINED,
 	MODEM_MGR_EVT_SHUTDOWN_READY,
 	MODEM_MGR_EVT_ERROR
+};
+
+/** @brief LTE cell information. */
+struct modem_mgr_cell {
+	/** E-UTRAN cell ID. */
+	uint32_t cell_id;
+	/** Tracking area code. */
+	uint32_t tac;
+};
+
+/** @brief PSM information. */
+struct modem_mgr_psm {
+	/** Tracking Area Update interval [s]. -1 if the timer is disabled. */
+	int tau;
+	/** Active time [s]. -1 if the timer is disabled. */
+	int active_time;
+};
+
+/** @brief eDRX information. */
+struct modem_mgr_edrx {
+	/** eDRX interval value [s] */
+	float edrx;
+	/** Paging time window [s] */
+	float ptw;
 };
 
 /** @brief Modem event. */
@@ -39,6 +66,9 @@ struct modem_mgr_event {
 	union {
 		struct cloud_data_modem modem;
 		struct cloud_data_battery bat;
+		struct modem_mgr_cell cell;
+		struct modem_mgr_psm psm;
+		struct modem_mgr_edrx edrx;
 		int err;
 	} data;
 };

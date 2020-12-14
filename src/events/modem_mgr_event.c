@@ -24,6 +24,15 @@ static int log_modem_mgr_event(const struct event_header *eh, char *buf,
 	case MODEM_MGR_EVT_LTE_CONNECTING:
 		strcpy(event_name, "MODEM_MGR_EVT_LTE_CONNECTING");
 		break;
+	case MODEM_MGR_EVT_LTE_CELL_UPDATE:
+		strcpy(event_name, "MODEM_MGR_EVT_LTE_CELL_UPDATE");
+		break;
+	case MODEM_MGR_EVT_LTE_PSM_UPDATE:
+		strcpy(event_name, "MODEM_MGR_EVT_LTE_PSM_UPDATE");
+		break;
+	case MODEM_MGR_EVT_LTE_EDRX_UPDATE:
+		strcpy(event_name, "MODEM_MGR_EVT_LTE_EDRX_UPDATE");
+		break;
 	case MODEM_MGR_EVT_MODEM_DATA_READY:
 		strcpy(event_name, "MODEM_MGR_EVT_MODEM_DATA_READY");
 		break;

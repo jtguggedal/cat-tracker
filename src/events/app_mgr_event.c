@@ -58,6 +58,12 @@ static int log_app_mgr_event(const struct event_header *eh, char *buf,
 	case APP_MGR_EVT_START:
 		strcpy(event_name, "APP_MGR_EVT_START");
 		break;
+	case APP_MGR_EVT_LTE_CONNECT:
+		strcpy(event_name, "APP_MGR_EVT_LTE_CONNECT");
+		break;
+	case APP_MGR_EVT_LTE_DISCONNECT:
+		strcpy(event_name, "APP_MGR_EVT_LTE_DISCONNECT");
+		break;
 	case APP_MGR_EVT_CONFIG_SEND:
 		strcpy(event_name, "APP_MGR_EVT_CONFIG_SEND");
 		break;

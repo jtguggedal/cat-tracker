@@ -88,9 +88,9 @@ static struct cloud_data_cfg current_cfg = {
 };
 
 /* Cloud connection state. */
-enum connection_state {
-	STATE_DISCONNECTED,
-	STATE_CONNECTED
+enum cloud_connection_state {
+	CLOUD_STATE_DISCONNECTED,
+	CLOUD_STATE_CONNECTED
 } state;
 
 /* Time state. */
@@ -129,17 +129,37 @@ static int config_settings_handler(const char *key, size_t len,
 SETTINGS_STATIC_HANDLER_DEFINE(MODULE, DEVICE_SETTINGS_KEY, NULL,
 			       config_settings_handler, NULL, NULL);
 
-static char *state2str(enum connection_state state)
+static char *state2str(enum cloud_connection_state state)
 {
-	switch (state) {
-	case STATE_DISCONNECTED: return "STATE_DISCONNECTED";
-	case STATE_CONNECTED: return "DATA_MGR_STATE_CONNECTED";
-	default: return "Unknown";
+	switch(state) {
+		case CLOUD_STATE_DISCONNECTED:
+			return "CLOUD_STATE_DISCONNECTED";
+		case CLOUD_STATE_CONNECTED:
+			return "CLOUD_STATE_CONNECTED";
+		default:
+			return "Unknown";
 	}
 }
 
-static void state_set(enum connection_state new_state)
+static char *time_state2str(enum time_state state)
 {
+	switch(state) {
+		case TIME_STATE_NOT_OBTAINED:
+			return "TIME_STATE_NOT_OBTAINED";
+		case TIME_STATE_OBTAINED:
+			return "TIME_STATE_OBTAINED";
+		default:
+			return "Unknown";
+	}
+}
+
+static void state_set(enum cloud_connection_state new_state)
+{
+	if (new_state == state) {
+		LOG_DBG("State: %s", log_strdup(state2str(state)));
+		return;
+	}
+
 	LOG_DBG("State transition %s --> %s",
 		log_strdup(state2str(state)),
 		log_strdup(state2str(new_state)));
@@ -149,6 +169,15 @@ static void state_set(enum connection_state new_state)
 
 static void time_state_set(enum time_state new_state)
 {
+	if (new_state == time_state) {
+		LOG_DBG("State: %s", log_strdup(time_state2str(time_state)));
+		return;
+	}
+
+	LOG_DBG("Time state transition %s --> %s",
+		log_strdup(time_state2str(time_state)),
+		log_strdup(time_state2str(new_state)));
+
 	time_state = new_state;
 }
 
@@ -526,14 +555,14 @@ static void data_list_set(enum app_mgr_data_type *data_list, size_t count)
 	received_data_type_count = count;
 }
 
-static void on_state_disconnected(struct data_msg_data *msg)
+static void on_cloud_state_disconnected(struct data_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
-		state_set(STATE_CONNECTED);
+		state_set(CLOUD_STATE_CONNECTED);
 	}
 }
 
-static void on_state_connected(struct data_msg_data *msg)
+static void on_cloud_state_connected(struct data_msg_data *msg)
 {
 	/* Send data only if time is obtained. Otherwise cache it. */
 	switch (time_state) {
@@ -569,7 +598,7 @@ static void on_state_connected(struct data_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_DISCONNECTED)) {
-		state_set(STATE_DISCONNECTED);
+		state_set(CLOUD_STATE_DISCONNECTED);
 		return;
 	}
 
@@ -750,17 +779,17 @@ static void data_manager(void)
 		signal_error(err);
 	}
 
-	state_set(STATE_DISCONNECTED);
+	state_set(CLOUD_STATE_DISCONNECTED);
 
 	while (true) {
 		module_get_next_msg(&self, &msg);
 
 		switch (state) {
-		case STATE_DISCONNECTED:
-			on_state_disconnected(&msg);
+		case CLOUD_STATE_DISCONNECTED:
+			on_cloud_state_disconnected(&msg);
 			break;
-		case STATE_CONNECTED:
-			on_state_connected(&msg);
+		case CLOUD_STATE_CONNECTED:
+			on_cloud_state_connected(&msg);
 			break;
 		default:
 			LOG_WRN("Unknown sub state.");

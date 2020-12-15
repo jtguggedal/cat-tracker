@@ -131,25 +131,25 @@ SETTINGS_STATIC_HANDLER_DEFINE(MODULE, DEVICE_SETTINGS_KEY, NULL,
 
 static char *state2str(enum cloud_connection_state state)
 {
-	switch(state) {
-		case CLOUD_STATE_DISCONNECTED:
-			return "CLOUD_STATE_DISCONNECTED";
-		case CLOUD_STATE_CONNECTED:
-			return "CLOUD_STATE_CONNECTED";
-		default:
-			return "Unknown";
+	switch (state) {
+	case CLOUD_STATE_DISCONNECTED:
+		return "CLOUD_STATE_DISCONNECTED";
+	case CLOUD_STATE_CONNECTED:
+		return "CLOUD_STATE_CONNECTED";
+	default:
+		return "Unknown";
 	}
 }
 
 static char *time_state2str(enum time_state state)
 {
-	switch(state) {
-		case TIME_STATE_NOT_OBTAINED:
-			return "TIME_STATE_NOT_OBTAINED";
-		case TIME_STATE_OBTAINED:
-			return "TIME_STATE_OBTAINED";
-		default:
-			return "Unknown";
+	switch (state) {
+	case TIME_STATE_NOT_OBTAINED:
+		return "TIME_STATE_NOT_OBTAINED";
+	case TIME_STATE_OBTAINED:
+		return "TIME_STATE_OBTAINED";
+	default:
+		return "Unknown";
 	}
 }
 

@@ -288,14 +288,10 @@ static void signal_error(int err)
 static void data_send(void)
 {
 	int err;
-	struct data_mgr_event *data_mgr_event_new = new_data_mgr_event();
-	struct data_mgr_event *data_mgr_event_batch = new_data_mgr_event();
+	struct data_mgr_event *data_mgr_event_new;
+	struct data_mgr_event *data_mgr_event_batch;
 	struct cloud_codec_data codec;
 
-	data_mgr_event_new->type = DATA_MGR_EVT_DATA_SEND;
-	data_mgr_event_batch->type = DATA_MGR_EVT_DATA_SEND_BATCH;
-
-	// Encode newest data
 	err = cloud_codec_encode_data(
 		&codec,
 		&gps_buf[head_gps_buf],
@@ -318,6 +314,10 @@ static void data_send(void)
 	}
 
 	LOG_DBG("Data encoded successfully");
+
+
+	data_mgr_event_new = new_data_mgr_event();
+	data_mgr_event_new->type = DATA_MGR_EVT_DATA_SEND;
 
 	data_mgr_event_new->data.buffer.buf = codec.buf;
 	data_mgr_event_new->data.buffer.len = codec.len;
@@ -351,6 +351,8 @@ static void data_send(void)
 		return;
 	}
 
+	data_mgr_event_batch = new_data_mgr_event();
+	data_mgr_event_batch->type = DATA_MGR_EVT_DATA_SEND_BATCH;
 	data_mgr_event_batch->data.buffer.buf = codec.buf;
 	data_mgr_event_batch->data.buffer.len = codec.len;
 
@@ -371,9 +373,7 @@ static void cloud_manager_config_send(void)
 {
 	int err;
 	struct cloud_codec_data codec;
-	struct data_mgr_event *evt = new_data_mgr_event();
-
-	evt->type = DATA_MGR_EVT_CONFIG_SEND;
+	struct data_mgr_event *evt;
 
 	err = cloud_codec_encode_config(&codec, &current_cfg);
 	if (err) {
@@ -382,6 +382,8 @@ static void cloud_manager_config_send(void)
 		return;
 	}
 
+	evt = new_data_mgr_event();
+	evt->type = DATA_MGR_EVT_CONFIG_SEND;
 	evt->data.buffer.buf = codec.buf;
 	evt->data.buffer.len = codec.len;
 
@@ -393,11 +395,8 @@ static void cloud_manager_config_send(void)
 static void data_ui_send(void)
 {
 	int err;
-	struct data_mgr_event *evt = new_data_mgr_event();
+	struct data_mgr_event *evt;
 	struct cloud_codec_data codec;
-
-	/* UI data is sent as a separate copy. */
-	evt->type = DATA_MGR_EVT_UI_DATA_SEND;
 
 	err = cloud_codec_encode_ui_data(&codec, &ui_buf[head_ui_buf]);
 	if (err) {
@@ -406,6 +405,8 @@ static void data_ui_send(void)
 		return;
 	}
 
+	evt = new_data_mgr_event();
+	evt->type = DATA_MGR_EVT_UI_DATA_SEND;
 	evt->data.buffer.buf = codec.buf;
 	evt->data.buffer.len = codec.len;
 

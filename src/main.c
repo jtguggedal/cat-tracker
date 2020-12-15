@@ -32,8 +32,6 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
 extern atomic_t manager_count;
 
-extern void cJSON_Init(void);
-
 struct app_msg_data {
 	union {
 		struct cloud_mgr_event cloud;

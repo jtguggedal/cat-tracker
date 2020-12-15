@@ -428,13 +428,9 @@ int cloud_codec_decode_config(char *input, struct cloud_data_cfg *data)
 		return -ENOENT;
 	}
 
-	string = cJSON_Print(root_obj);
-	if (string == NULL) {
-		LOG_ERR("Failed to print message.");
-		goto exit;
+	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+		json_print_obj("Decoded message:\n", root_obj);
 	}
-
-	LOG_DBG("Decoded message: %s", log_strdup(string));
 
 	group_obj = json_object_decode(root_obj, OBJECT_CONFIG);
 	if (group_obj != NULL) {
@@ -517,9 +513,11 @@ int cloud_codec_encode_config(struct cloud_codec_data *output,
 		goto exit;
 	}
 
-	buffer = cJSON_Print(root_obj);
+	buffer = cJSON_PrintUnformatted(root_obj);
 
-	LOG_INF("Encoded message: %s\n", log_strdup(buffer));
+	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+		json_print_obj("Encoded message:\n", root_obj);
+	}
 
 	output->buf = buffer;
 	output->len = strlen(buffer);
@@ -593,9 +591,11 @@ int cloud_codec_encode_data(struct cloud_codec_data *output,
 		goto exit;
 	}
 
-	buffer = cJSON_Print(root_obj);
+	buffer = cJSON_PrintUnformatted(root_obj);
 
-	LOG_INF("Encoded message: %s\n", log_strdup(buffer));
+	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+		json_print_obj("Encoded message:\n", root_obj);
+	}
 
 	output->buf = buffer;
 	output->len = strlen(buffer);
@@ -629,9 +629,11 @@ int cloud_codec_encode_ui_data(struct cloud_codec_data *output,
 		goto exit;
 	}
 
-	buffer = cJSON_Print(root_obj);
+	buffer = cJSON_PrintUnformatted(root_obj);
 
-	LOG_INF("Encoded message: %s\n", log_strdup(buffer));
+	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+		json_print_obj("Encoded message:\n", root_obj);
+	}
 
 	output->buf = buffer;
 	output->len = strlen(buffer);
@@ -778,9 +780,11 @@ int cloud_codec_encode_batch_data(struct cloud_codec_data *output,
 		goto exit;
 	}
 
-	buffer = cJSON_Print(root_obj);
+	buffer = cJSON_PrintUnformatted(root_obj);
 
-	printk("Encoded batch message: %s\n", buffer);
+	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+		json_print_obj("Encoded message:\n", root_obj);
+	}
 
 	output->buf = buffer;
 	output->len = strlen(buffer);

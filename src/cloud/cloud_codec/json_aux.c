@@ -1,6 +1,10 @@
 #include <errno.h>
 #include "json_aux.h"
 #include "cJSON.h"
+#include "cJSON_os.h"
+
+#include <logging/log.h>
+LOG_MODULE_REGISTER(cloud_codec_utils, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
 int json_add_obj(cJSON *parent, const char *str, cJSON *item)
 {
@@ -55,4 +59,18 @@ int json_add_str(cJSON *parent, const char *str, const char *item)
 	}
 
 	return json_add_obj(parent, str, json_str);
+}
+
+void json_print_obj(const char *prefix, const cJSON *obj)
+{
+	char *string = cJSON_Print(obj);
+
+	if (string == NULL) {
+		LOG_ERR("Failed to print object content");
+		return;
+	}
+
+	printk("%s%s\n", prefix, string);
+
+	cJSON_FreeString(string);
 }

@@ -108,13 +108,9 @@ static void ext_sensor_handler(const struct ext_sensor_evt *const evt)
 
 static int sensor_manager_data_get(void)
 {
-	struct sensor_mgr_event *sensor_mgr_event = new_sensor_mgr_event();
+	struct sensor_mgr_event *sensor_mgr_event;
 #if defined(CONFIG_EXTERNAL_SENSORS)
 	int err;
-
-	sensor_mgr_event->data.sensors.env_ts = k_uptime_get();
-	sensor_mgr_event->data.sensors.queued = true;
-	sensor_mgr_event->type = SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY;
 
 	/* Request data from external sensors. */
 	err = ext_sensors_temperature_get(&sensor_mgr_event->data.sensors.temp);
@@ -128,6 +124,11 @@ static int sensor_manager_data_get(void)
 		LOG_ERR("temperature_get, error: %d", err);
 		return err;
 	}
+
+	sensor_mgr_event = new_sensor_mgr_event();
+	sensor_mgr_event->data.sensors.env_ts = k_uptime_get();
+	sensor_mgr_event->data.sensors.queued = true;
+	sensor_mgr_event->type = SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY;
 #else
 
 	/* This event must be sent even though environmental sensors are not
@@ -140,6 +141,7 @@ static int sensor_manager_data_get(void)
 	/* Set this entry to false signifying that the event carries no data.
 	 * This makes sure that the entry is not stored in the circular buffer.
 	 */
+	sensor_mgr_event = new_sensor_mgr_event();
 	sensor_mgr_event->data.sensors.queued = false;
 	sensor_mgr_event->type = SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY;
 #endif

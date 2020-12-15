@@ -11,3 +11,5 @@ int json_add_bool(cJSON *parent, const char *str, int item);
 cJSON *json_object_decode(cJSON *obj, const char *str);
 
 int json_add_str(cJSON *parent, const char *str, const char *item);
+
+void json_print_obj(const char *prefix, const cJSON *obj);

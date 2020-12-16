@@ -67,9 +67,6 @@ static int log_app_mgr_event(const struct event_header *eh, char *buf,
 	case APP_MGR_EVT_CONFIG_SEND:
 		strcpy(event_name, "APP_MGR_EVT_CONFIG_SEND");
 		break;
-	case APP_MGR_EVT_DATA_SEND:
-		strcpy(event_name, "APP_MGR_EVT_DATA_SEND");
-		break;
 	case APP_MGR_EVT_UI_DATA_SEND:
 		strcpy(event_name, "APP_MGR_EVT_UI_DATA_SEND");
 		break;

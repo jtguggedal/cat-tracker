@@ -22,9 +22,11 @@ extern "C" {
 
 /** @brief Data event types submitted by Data manager. */
 enum data_mgr_event_types {
+	DATA_MGR_EVT_DATA_READY,
 	DATA_MGR_EVT_DATA_SEND,
 	DATA_MGR_EVT_DATA_SEND_BATCH,
 	DATA_MGR_EVT_UI_DATA_SEND,
+	DATA_MGR_EVT_UI_DATA_READY,
 	DATA_MGR_EVT_CONFIG_INIT,
 	DATA_MGR_EVT_CONFIG_READY,
 	DATA_MGR_EVT_CONFIG_SEND,

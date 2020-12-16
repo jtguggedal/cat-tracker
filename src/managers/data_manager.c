@@ -7,6 +7,7 @@
 #include <zephyr.h>
 #include <event_manager.h>
 #include <settings/settings.h>
+#include <date_time.h>
 
 #include "cloud/cloud_codec/cloud_codec.h"
 
@@ -93,12 +94,6 @@ enum cloud_connection_state {
 	CLOUD_STATE_CONNECTED
 } state;
 
-/* Time state. */
-enum time_state {
-	TIME_STATE_NOT_OBTAINED,
-	TIME_STATE_OBTAINED
-} time_state;
-
 static struct k_delayed_work data_send_work;
 
 /* List used to keep track of responses from other managers with data that is
@@ -141,18 +136,6 @@ static char *state2str(enum cloud_connection_state state)
 	}
 }
 
-static char *time_state2str(enum time_state state)
-{
-	switch (state) {
-	case TIME_STATE_NOT_OBTAINED:
-		return "TIME_STATE_NOT_OBTAINED";
-	case TIME_STATE_OBTAINED:
-		return "TIME_STATE_OBTAINED";
-	default:
-		return "Unknown";
-	}
-}
-
 static void state_set(enum cloud_connection_state new_state)
 {
 	if (new_state == state) {
@@ -165,20 +148,6 @@ static void state_set(enum cloud_connection_state new_state)
 		log_strdup(state2str(new_state)));
 
 	state = new_state;
-}
-
-static void time_state_set(enum time_state new_state)
-{
-	if (new_state == time_state) {
-		LOG_DBG("State: %s", log_strdup(time_state2str(time_state)));
-		return;
-	}
-
-	LOG_DBG("Time state transition %s --> %s",
-		log_strdup(time_state2str(time_state)),
-		log_strdup(time_state2str(new_state)));
-
-	time_state = new_state;
 }
 
 static bool pending_data_add(void *ptr)
@@ -235,7 +204,7 @@ static int config_settings_handler(const char *key, size_t len,
 	return 0;
 }
 
-static int data_manager_save_config(const void *buf, size_t buf_len)
+static int save_config(const void *buf, size_t buf_len)
 {
 	int err;
 
@@ -291,6 +260,14 @@ static void data_send(void)
 	struct data_mgr_event *data_mgr_event_new;
 	struct data_mgr_event *data_mgr_event_batch;
 	struct cloud_codec_data codec;
+
+	if (!date_time_is_valid()) {
+		/* Date time library does not have valid time to
+		 * timestamp cloud data. Abort cloud publicaton. Data will
+		 * be cached in it respective ringbuffer.
+		 */
+		return;
+	}
 
 	err = cloud_codec_encode_data(
 		&codec,
@@ -360,7 +337,7 @@ static void data_send(void)
 	EVENT_SUBMIT(data_mgr_event_batch);
 }
 
-static void cloud_manager_config_get(void)
+static void config_get(void)
 {
 	struct data_mgr_event *evt = new_data_mgr_event();
 
@@ -369,7 +346,7 @@ static void cloud_manager_config_get(void)
 	EVENT_SUBMIT(evt);
 }
 
-static void cloud_manager_config_send(void)
+static void config_send(void)
 {
 	int err;
 	struct cloud_codec_data codec;
@@ -397,6 +374,14 @@ static void data_ui_send(void)
 	int err;
 	struct data_mgr_event *evt;
 	struct cloud_codec_data codec;
+
+	if (!date_time_is_valid()) {
+		/* Date time library does not have valid time to
+		 * timestamp cloud data. Abort cloud publicaton. Data will
+		 * be cached in it respective ringbuffer.
+		 */
+		return;
+	}
 
 	err = cloud_codec_encode_ui_data(&codec, &ui_buf[head_ui_buf]);
 	if (err) {
@@ -516,11 +501,11 @@ static void clear_local_data_list(void)
 
 static void data_send_work_fn(struct k_work *work)
 {
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
+	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
 
-	app_mgr_event->type = APP_MGR_EVT_DATA_SEND;
+	data_mgr_event->type = DATA_MGR_EVT_DATA_READY;
 
-	EVENT_SUBMIT(app_mgr_event);
+	EVENT_SUBMIT(data_mgr_event);
 
 	clear_local_data_list();
 	k_delayed_work_cancel(&data_send_work);
@@ -565,49 +550,28 @@ static void on_cloud_state_disconnected(struct data_msg_data *msg)
 
 static void on_cloud_state_connected(struct data_msg_data *msg)
 {
-	/* Send data only if time is obtained. Otherwise cache it. */
-	switch (time_state) {
-	case TIME_STATE_OBTAINED:
-		if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_SEND)) {
-			data_send();
-			return;
-		}
-
-		if (IS_EVENT(msg, ui, UI_MGR_EVT_BUTTON_DATA_READY)) {
-			cloud_codec_populate_ui_buffer(
-						ui_buf,
-						&msg->manager.ui.data.ui,
-						&head_ui_buf);
-			data_ui_send();
-			return;
-		}
-		break;
-	case TIME_STATE_NOT_OBTAINED:
-		if (IS_EVENT(msg, modem, MODEM_MGR_EVT_DATE_TIME_OBTAINED)) {
-			time_state_set(TIME_STATE_OBTAINED);
-			return;
-		}
-		break;
-	default:
-		LOG_WRN("Unknown sub-sub state.");
-		break;
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_DATA_READY)) {
+		data_send();
+		return;
 	}
 
 	if (IS_EVENT(msg, app, APP_MGR_EVT_CONFIG_GET)) {
-		cloud_manager_config_get();
+		config_get();
+		return;
+	}
+
+	if (IS_EVENT(msg, app, APP_MGR_EVT_CONFIG_SEND)) {
+		config_send();
+		return;
+	}
+
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_UI_DATA_READY)) {
+		data_ui_send();
 		return;
 	}
 
 	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_DISCONNECTED)) {
 		state_set(CLOUD_STATE_DISCONNECTED);
-		return;
-	}
-
-	/* Config is not timestamped and does not to be dependent on the
-	 * MODEM_MGR_SUB_SUB_STATE_DATE_TIME_OBTAINED state.
-	 */
-	if (IS_EVENT(msg, app, APP_MGR_EVT_CONFIG_SEND)) {
-		cloud_manager_config_send();
 		return;
 	}
 
@@ -681,8 +645,8 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 		}
 
 		if (config_change) {
-			err = data_manager_save_config(&current_cfg,
-						       sizeof(current_cfg));
+			err = save_config(&current_cfg,
+					  sizeof(current_cfg));
 			if (err) {
 				LOG_WRN("Configuration not stored, error: %d",
 					err);
@@ -728,6 +692,20 @@ static void on_all_states(struct data_msg_data *msg)
 		return;
 	}
 
+	if (IS_EVENT(msg, ui, UI_MGR_EVT_BUTTON_DATA_READY)) {
+		cloud_codec_populate_ui_buffer(
+					ui_buf,
+					&msg->manager.ui.data.ui,
+					&head_ui_buf);
+
+		struct data_mgr_event *data_mgr_event = new_data_mgr_event();
+
+		data_mgr_event->type = DATA_MGR_EVT_UI_DATA_READY;
+
+		EVENT_SUBMIT(data_mgr_event);
+		return;
+	}
+
 	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_MODEM_DATA_READY)) {
 		cloud_codec_populate_modem_buffer(
 			modem_buf,
@@ -736,7 +714,6 @@ static void on_all_states(struct data_msg_data *msg)
 
 		data_status_set(APP_DATA_MODEM);
 	}
-
 
 	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_BATTERY_DATA_READY)) {
 		cloud_codec_populate_bat_buffer(
@@ -775,7 +752,6 @@ static void on_all_states(struct data_msg_data *msg)
 	if (IS_EVENT(msg, gps, GPS_MGR_EVT_TIMEOUT)) {
 		data_status_set(APP_DATA_GNSS);
 	}
-
 
 	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_DATA_ACK)) {
 		pending_data_ack(msg->manager.cloud.data.ptr);

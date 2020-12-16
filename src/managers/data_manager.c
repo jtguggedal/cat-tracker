@@ -99,7 +99,7 @@ static struct k_delayed_work data_send_work;
 /* List used to keep track of responses from other managers with data that is
  * requested to be sampled/published.
  */
-static enum app_mgr_data_type data_types_list[APP_DATA_NUMBER_OF_TYPES_MAX];
+static enum app_mgr_data_type data_types_list[APP_DATA_COUNT];
 
 /* Total number of data types requested for a particular sample/publish
  * cycle.
@@ -527,7 +527,7 @@ static void data_status_set(enum app_mgr_data_type data_type)
 
 static void data_list_set(enum app_mgr_data_type *data_list, size_t count)
 {
-	if ((count == 0) || (count > APP_DATA_NUMBER_OF_TYPES_MAX)) {
+	if ((count == 0) || (count > APP_DATA_COUNT)) {
 		LOG_ERR("Invalid data type list length");
 		return;
 	}
@@ -730,7 +730,7 @@ static void on_all_states(struct data_msg_data *msg)
 			&msg->manager.sensor.data.sensors,
 			&head_sensor_buf);
 
-		data_status_set(APP_DATA_ENVIRONMENTALS);
+		data_status_set(APP_DATA_ENVIRONMENTAL);
 	}
 
 	if (IS_EVENT(msg, sensor, SENSOR_MGR_EVT_MOVEMENT_DATA_READY)) {

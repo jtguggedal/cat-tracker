@@ -22,37 +22,64 @@ extern "C" {
 
 /** @brief Application event types submitted by Application manager. */
 enum app_mgr_event_type {
+	/* Signal that the application has done necessary setup, and
+	 * now started.
+	 */
 	APP_MGR_EVT_START,
+
+	/* Connect to LTE network. */
 	APP_MGR_EVT_LTE_CONNECT,
+
+	/* Disconnect from LTE network. */
 	APP_MGR_EVT_LTE_DISCONNECT,
+
+	/* Signal other modules to start sampling and report the data when
+	 * it's ready.
+	 * The event must also contain a list with requested data types,
+	 * @ref enum app_mgr_data_type.
+	 */
 	APP_MGR_EVT_DATA_GET,
+
+	/* Create a list with all available sensor types in the system and
+	 * distribute it as a APP_MGR_EVT_DATA_GET event.
+	 */
 	APP_MGR_EVT_DATA_GET_ALL,
+
+	/* Request latest configuration from the cloud. */
 	APP_MGR_EVT_CONFIG_GET,
+
+	/* Send the currently applied local configuration to cloud. */
 	APP_MGR_EVT_CONFIG_SEND,
-	APP_MGR_EVT_UI_DATA_SEND,
+
+	/* The application module has performed all procedures to prepare for
+	 * a shutdown of the system.
+	 */
 	APP_MGR_EVT_SHUTDOWN_READY,
+
+	/* An error has occurred in the application module. Error details are
+	 * attached in the event structure.
+	 */
 	APP_MGR_EVT_ERROR
 };
 
+/** @brief Data types that the application module requests samples for in
+ *	   @ref enum app_mgr_event_type APP_MGR_EVT_DATA_GET.
+ */
 enum app_mgr_data_type {
-	APP_DATA_ENVIRONMENTALS,
+	APP_DATA_ENVIRONMENTAL,
 	APP_DATA_MOVEMENT,
 	APP_DATA_MODEM,
 	APP_DATA_BATTERY,
 	APP_DATA_GNSS,
 
-	APP_DATA_NUMBER_OF_TYPES_MAX,
+	APP_DATA_COUNT,
 };
 
-struct app_mgr_event_data {
-	const char *buf;
-};
-
-/** @brief Application event. */
+/** @brief Application module event. */
 struct app_mgr_event {
 	struct event_header header;
 	enum app_mgr_event_type type;
-	enum app_mgr_data_type data_list[APP_DATA_NUMBER_OF_TYPES_MAX];
+	enum app_mgr_data_type data_list[APP_DATA_COUNT];
 
 	int err;
 
@@ -64,6 +91,7 @@ struct app_mgr_event {
 	int timeout;
 };
 
+/* Register app module events as an event type with the event manager. */
 EVENT_TYPE_DECLARE(app_mgr_event);
 
 #ifdef __cplusplus

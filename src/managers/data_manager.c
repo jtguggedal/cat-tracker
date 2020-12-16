@@ -615,6 +615,7 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONFIG_RECEIVED)) {
 
 		int err;
+		bool config_change = false;
 		struct cloud_data_cfg new = {
 			.act = msg->manager.cloud.data.config.act,
 			.actw = msg->manager.cloud.data.config.actw,
@@ -639,41 +640,58 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 			} else {
 				LOG_WRN("New Device mode: Passive");
 			}
+
+			config_change = true;
 		}
 
 		if (current_cfg.actw != new.actw && new.actw != 0) {
 			current_cfg.actw = new.actw;
 			LOG_WRN("New Active timeout: %d", current_cfg.actw);
+
+			config_change = true;
 		}
 
 		if (current_cfg.pasw != new.pasw && new.pasw != 0) {
 			current_cfg.pasw = new.pasw;
 			LOG_WRN("New Movement resolution: %d",
 				current_cfg.pasw);
+
+			config_change = true;
 		}
 
 		if (current_cfg.movt != new.movt && new.movt != 0) {
 			current_cfg.movt = new.movt;
 			LOG_WRN("New Movement timeout: %d", current_cfg.movt);
+
+			config_change = true;
 		}
 
 		if (current_cfg.acct != new.acct && new.acct != 0) {
 			current_cfg.acct = new.acct;
 			LOG_WRN("New Movement threshold: %d", current_cfg.acct);
+
+			config_change = true;
 		}
 
 		if (current_cfg.gpst != new.gpst && new.gpst != 0) {
 			current_cfg.gpst = new.gpst;
 			LOG_WRN("New GPS timeout: %d", current_cfg.gpst);
+
+			config_change = true;
 		}
 
-		err = data_manager_save_config(&current_cfg,
-					       sizeof(current_cfg));
-		if (err) {
-			LOG_WRN("Configuration not stored, error: %d", err);
-		}
+		if (config_change) {
+			err = data_manager_save_config(&current_cfg,
+						       sizeof(current_cfg));
+			if (err) {
+				LOG_WRN("Configuration not stored, error: %d",
+					err);
+			}
 
-		config_distribute(DATA_MGR_EVT_CONFIG_READY);
+			config_distribute(DATA_MGR_EVT_CONFIG_READY);
+		} else {
+			LOG_DBG("No change in device configuration");
+		}
 	}
 }
 

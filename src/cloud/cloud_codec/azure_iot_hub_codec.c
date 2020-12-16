@@ -408,7 +408,7 @@ exit:
 /* Public interface */
 int cloud_codec_decode_config(char *input, struct cloud_data_cfg *data)
 {
-	char *string = NULL;
+	int err = 0;
 	cJSON *root_obj = NULL;
 	cJSON *group_obj = NULL;
 	cJSON *subgroup_obj = NULL;
@@ -440,11 +440,13 @@ int cloud_codec_decode_config(char *input, struct cloud_data_cfg *data)
 
 	group_obj = json_object_decode(root_obj, OBJECT_DESIRED);
 	if (group_obj == NULL) {
+		err = -ENODATA;
 		goto exit;
 	}
 
 	subgroup_obj = json_object_decode(group_obj, OBJECT_CONFIG);
 	if (subgroup_obj == NULL) {
+		err = -ENODATA;
 		goto exit;
 	}
 
@@ -480,9 +482,10 @@ get_data:
 	if (acc_thres != NULL) {
 		data->acct = acc_thres->valueint;
 	}
+
 exit:
 	cJSON_Delete(root_obj);
-	return 0;
+	return err;
 }
 
 int cloud_codec_encode_config(struct cloud_codec_data *output,

@@ -14,6 +14,7 @@
 #include "watchdog.h"
 #endif
 
+/* Module name is used by the event manager macros in this file */
 #define MODULE app_manager
 
 #include "modules_common.h"
@@ -28,10 +29,15 @@
 
 #include <logging/log.h>
 #include <logging/log_ctrl.h>
+
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
 extern atomic_t manager_count;
 
+/* Message structure. Events from other managers are converted to messages
+ * in the event manager handler, and then queued up in the message queue
+ * for processing in the main thread.
+ */
 struct app_msg_data {
 	union {
 		struct cloud_mgr_event cloud;
@@ -44,22 +50,22 @@ struct app_msg_data {
 	} manager;
 };
 
-/* Expose external manager threads. */
-#if defined(CONFIG_DATA_MANAGER)
-extern const k_tid_t data_manager_thread;
-#endif
-#if defined(CONFIG_SENSOR_MANAGER)
-extern const k_tid_t sensor_manager_thread;
-#endif
-
 /* Application manager super states. */
-enum app_state_type {
+enum app_state {
 	APP_MGR_STATE_INIT,
 	APP_MGR_STATE_RUNNING
 } app_state;
 
-/* Application sub states. */
-enum app_sub_state_type {
+/* Application sub states. The application can be in either active or passive
+ * mode.
+ *
+ * Active mode: Sensor data and GPS position is acquired at a configured
+ *		interval and sent to cloud.
+ *
+ * Passive mode: Sensor data and GPS position is acquired when movement is
+ *		 detected, or after the configured movement timeout occurs.
+ */
+enum app_sub_state {
 	APP_SUB_STATE_ACTIVE_MODE,
 	APP_SUB_STATE_PASSIVE_MODE,
 } app_sub_state;
@@ -67,27 +73,87 @@ enum app_sub_state_type {
 /* Internal copy of the device configuration. */
 static struct cloud_data_cfg app_cfg;
 
-static void data_sample_timer_handler(struct k_timer *dummy);
+/* Timer callback used to signal when timeout has occurred both in active
+ * and passive mode.
+ */
+static void data_sample_timer_handler(struct k_timer *timer);
 
 /* Application manager message queue. */
-K_MSGQ_DEFINE(msgq_app, sizeof(struct app_msg_data), 10, 4);
+#define APP_QUEUE_ENTRY_COUNT		10
+#define APP_QUEUE_BYTE_ALIGNMENT	4
 
-/* Timers used by the application manager */
+K_MSGQ_DEFINE(msgq_app, sizeof(struct app_msg_data), APP_QUEUE_ENTRY_COUNT,
+	      APP_QUEUE_BYTE_ALIGNMENT);
+
+/* Data sample timer used in active mode. */
 K_TIMER_DEFINE(data_sample_timer, data_sample_timer_handler, NULL);
+
+/* Movement timer used to detect movement timeouts in passive mode. */
 K_TIMER_DEFINE(movement_timeout_timer, data_sample_timer_handler, NULL);
+
+/* Movement resolution timer decides the period after movement that consecutive
+ * movements are ignored and do not cause data collection. This is used to
+ * lower power consumption by limiting how often GPS search is performed and
+ * data is sent on air.
+ */
 K_TIMER_DEFINE(movement_resolution_timer, NULL, NULL);
 
+/* Module data structure to hold information of the application module, which
+ * opens up for using convenienve functions available for modules.
+ */
 static struct module_data self = {
 	.msg_q = &msgq_app,
 };
 
-static void state_set(enum app_state_type new_state)
+static char *state2str(enum app_state state)
 {
+	switch (state) {
+	case APP_MGR_STATE_INIT:
+		return "APP_MGR_STATE_INIT";
+	case APP_MGR_STATE_RUNNING:
+		return "APP_MGR_STATE_RUNNING";
+	default:
+		return "Unknown";
+	}
+}
+
+static char *sub_state2str(enum app_sub_state state)
+{
+	switch (state) {
+	case APP_SUB_STATE_ACTIVE_MODE:
+		return "APP_SUB_STATE_ACTIVE_MODE";
+	case APP_SUB_STATE_PASSIVE_MODE:
+		return "APP_SUB_STATE_PASSIVE_MODE";
+	default:
+		return "Unknown";
+	}
+}
+
+static void state_set(enum app_state new_state)
+{
+	if (new_state == app_state) {
+		LOG_DBG("State: %s", log_strdup(state2str(app_state)));
+		return;
+	}
+
+	LOG_DBG("State transition %s --> %s",
+		log_strdup(state2str(app_state)),
+		log_strdup(state2str(new_state)));
+
 	app_state = new_state;
 }
 
-static void sub_state_set(enum app_sub_state_type new_state)
+static void sub_state_set(enum app_sub_state new_state)
 {
+	if (new_state == app_sub_state) {
+		LOG_DBG("State: %s", log_strdup(sub_state2str(app_sub_state)));
+		return;
+	}
+
+	LOG_DBG("Time state transition %s --> %s",
+		log_strdup(sub_state2str(app_sub_state)),
+		log_strdup(sub_state2str(new_state)));
+
 	app_sub_state = new_state;
 }
 
@@ -117,7 +183,7 @@ static void data_get_all(void)
 	/* Specify which data that is to be included in the transmission. */
 	app_mgr_event->data_list[0] = APP_DATA_MODEM;
 	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
-	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTALS;
+	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
 	app_mgr_event->data_list[3] = APP_DATA_GNSS;
 
 	/* Set list count to number of data types passed in app_mgr_event. */
@@ -139,7 +205,7 @@ static void data_get_init(void)
 	/* Specify which data that is to be included in the transmission. */
 	app_mgr_event->data_list[0] = APP_DATA_MODEM;
 	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
-	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTALS;
+	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
 
 	/* Set list count to number of data types passed in app_mgr_event. */
 	app_mgr_event->count = 3;
@@ -153,8 +219,9 @@ static void data_get_init(void)
 	EVENT_SUBMIT(app_mgr_event);
 }
 
-static void data_sample_timer_handler(struct k_timer *dummy)
+static void data_sample_timer_handler(struct k_timer *timer)
 {
+	ARG_UNUSED(timer);
 	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
 
 	app_mgr_event->type = APP_MGR_EVT_DATA_GET_ALL;
@@ -162,6 +229,9 @@ static void data_sample_timer_handler(struct k_timer *dummy)
 	EVENT_SUBMIT(app_mgr_event);
 }
 
+/* Event manager handler. Puts event data into messages and adds them to the
+ * application messagea queue.
+ */
 static bool event_handler(const struct event_header *eh)
 {
 	if (is_cloud_mgr_event(eh)) {

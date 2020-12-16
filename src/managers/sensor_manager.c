@@ -200,7 +200,7 @@ static bool sensor_data_requested(enum app_mgr_data_type *data_list,
 				  size_t count)
 {
 	for (size_t i = 0; i < count; i++) {
-		if (data_list[i] == APP_DATA_ENVIRONMENTALS) {
+		if (data_list[i] == APP_DATA_ENVIRONMENTAL) {
 			return true;
 		}
 	}

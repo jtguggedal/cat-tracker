@@ -11,7 +11,7 @@
 static char *type2str(enum app_mgr_data_type type)
 {
 	switch (type) {
-	case APP_DATA_ENVIRONMENTALS:
+	case APP_DATA_ENVIRONMENTAL:
 		return "ENV";
 	case APP_DATA_MOVEMENT:
 		return "MOVE";
@@ -66,9 +66,6 @@ static int log_app_mgr_event(const struct event_header *eh, char *buf,
 		break;
 	case APP_MGR_EVT_CONFIG_SEND:
 		strcpy(event_name, "APP_MGR_EVT_CONFIG_SEND");
-		break;
-	case APP_MGR_EVT_UI_DATA_SEND:
-		strcpy(event_name, "APP_MGR_EVT_UI_DATA_SEND");
 		break;
 	case APP_MGR_EVT_SHUTDOWN_READY:
 		strcpy(event_name, "APP_MGR_EVT_SHUTDOWN_READY");

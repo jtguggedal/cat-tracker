@@ -459,6 +459,13 @@ static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
 
 			EVENT_SUBMIT(cloud_mgr_event);
 			break;
+		} else if (err == -ENODATA) {
+			LOG_WRN("Device configuration empty!");
+		} else {
+			LOG_ERR("Decoding of device configuration, error: %d",
+				err);
+			signal_error(err);
+			break;
 		}
 
 		// Perhaps DBG level logging here

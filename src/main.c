@@ -335,13 +335,6 @@ static void on_sub_state_active(struct app_msg_data *msg)
 
 static void on_state_running(struct app_msg_data *msg)
 {
-	/* Always send the device configuration upon a
-	 * established connection to cloud.
-	 */
-	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
-		config_send();
-	}
-
 	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_DATE_TIME_OBTAINED)) {
 		data_get_init();
 	}

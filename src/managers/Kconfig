@@ -42,7 +42,7 @@ config MODEM_MGR_THREAD_STACK_SIZE
 
 config EXPECTED_MODEM_FIRMWARE_VERSION
 	string "The expected modem firmware version"
-	default "mfw_nrf9160_1.2.1"
+	default "mfw_nrf9160_1.2.2"
 
 endif
 

@@ -221,7 +221,7 @@ static int save_config(const void *buf, size_t buf_len)
 	return 0;
 }
 
-static int data_manager_setup(void)
+static int setup(void)
 {
 	int err;
 
@@ -802,9 +802,9 @@ static void data_manager(void)
 
 	atomic_inc(&manager_count);
 
-	err = data_manager_setup();
+	err = setup();
 	if (err) {
-		LOG_ERR("data_manager_setup, error: %d", err);
+		LOG_ERR("setup, error: %d", err);
 		signal_error(err);
 	}
 

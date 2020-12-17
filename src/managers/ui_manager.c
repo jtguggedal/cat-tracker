@@ -87,7 +87,7 @@ static void button_handler(uint32_t button_states, uint32_t has_changed)
 #endif
 }
 
-static int ui_manager_setup(void)
+static int setup(void)
 {
 	int err;
 
@@ -107,9 +107,9 @@ static void message_handler(struct ui_msg_data *msg)
 
 		atomic_inc(&manager_count);
 
-		err = ui_manager_setup();
+		err = setup();
 		if (err) {
-			LOG_ERR("ui_manager_setup, error: %d", err);
+			LOG_ERR("setup, error: %d", err);
 			signal_error(err);
 		}
 	}

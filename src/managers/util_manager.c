@@ -188,7 +188,7 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
-static void state_agnostic_manager_events(struct util_msg_data *msg)
+static void on_all_states(struct util_msg_data *msg)
 {
 	static int reboot_ack_cnt;
 
@@ -204,10 +204,6 @@ static void state_agnostic_manager_events(struct util_msg_data *msg)
 		default:
 			break;
 		}
-	}
-
-	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_ERROR)) {
-
 	}
 
 	if (is_modem_mgr_event(&msg->manager.modem.header)) {
@@ -319,7 +315,7 @@ static void message_handler(struct util_msg_data *msg)
 	}
 
 
-	state_agnostic_manager_events(msg);
+	on_all_states(msg);
 }
 
 EVENT_LISTENER(MODULE, event_handler);

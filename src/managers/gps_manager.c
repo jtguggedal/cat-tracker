@@ -49,9 +49,7 @@ static enum gps_manager_sub_state_type {
 	GPS_MGR_SUB_STATE_SEARCH
 } gps_sub_state;
 
-K_MSGQ_DEFINE(msgq_gps, sizeof(struct gps_msg_data), 10, 4);
-
-static void gps_manager(struct gps_msg_data *data);
+static void message_handler(struct gps_msg_data *data);
 
 static void state_set(enum gps_manager_state_type new_state)
 {
@@ -92,7 +90,7 @@ static void signal_event(enum gps_mgr_event_type type)
 	EVENT_SUBMIT(gps_mgr_event);
 }
 
-static void gps_manager_data_send(struct gps_pvt *gps_data)
+static void gps_data_send(struct gps_pvt *gps_data)
 {
 	struct gps_mgr_event *gps_mgr_event = new_gps_mgr_event();
 
@@ -109,7 +107,7 @@ static void gps_manager_data_send(struct gps_pvt *gps_data)
 	EVENT_SUBMIT(gps_mgr_event);
 }
 
-static void gps_manager_search_start(void)
+static void gps_search_start(void)
 {
 	int err;
 
@@ -128,7 +126,7 @@ static void gps_manager_search_start(void)
 	signal_event(GPS_MGR_EVT_ACTIVE);
 }
 
-static void gps_manager_search_stop(void)
+static void gps_search_stop(void)
 {
 	int err;
 
@@ -158,7 +156,7 @@ static void gps_time_set(struct gps_pvt *gps_data)
 	date_time_set(&gps_time);
 }
 
-static void gps_trigger_handler(const struct device *dev, struct gps_event *evt)
+static void gps_event_handler(const struct device *dev, struct gps_event *evt)
 {
 	switch (evt->type) {
 	case GPS_EVT_SEARCH_STARTED:
@@ -170,7 +168,7 @@ static void gps_trigger_handler(const struct device *dev, struct gps_event *evt)
 	case GPS_EVT_SEARCH_TIMEOUT:
 		LOG_DBG("GPS_EVT_SEARCH_TIMEOUT");
 		signal_event(GPS_MGR_EVT_TIMEOUT);
-		gps_manager_search_stop();
+		gps_search_stop();
 		break;
 	case GPS_EVT_PVT:
 		/* Don't spam logs */
@@ -178,8 +176,8 @@ static void gps_trigger_handler(const struct device *dev, struct gps_event *evt)
 	case GPS_EVT_PVT_FIX:
 		LOG_DBG("GPS_EVT_PVT_FIX");
 		gps_time_set(&evt->pvt);
-		gps_manager_data_send(&evt->pvt);
-		gps_manager_search_stop();
+		gps_data_send(&evt->pvt);
+		gps_search_stop();
 		break;
 	case GPS_EVT_NMEA:
 		/* Don't spam logs */
@@ -209,7 +207,7 @@ static void gps_trigger_handler(const struct device *dev, struct gps_event *evt)
 	}
 }
 
-static int gps_manager_setup(void)
+static int setup(void)
 {
 	int err;
 
@@ -220,7 +218,7 @@ static int gps_manager_setup(void)
 		return -ENODEV;
 	}
 
-	err = gps_init(gps_dev, gps_trigger_handler);
+	err = gps_init(gps_dev, gps_event_handler);
 	if (err) {
 		LOG_ERR("Could not initialize GPS, error: %d", err);
 		return err;
@@ -243,14 +241,14 @@ static bool event_handler(const struct event_header *eh)
 			atomic_inc(&manager_count);
 			state_set(GPS_MGR_STATE_INIT);
 
-			err = gps_manager_setup();
+			err = setup();
 			if (err) {
-				LOG_ERR("gps_manager_setup, error: %d", err);
+				LOG_ERR("setup, error: %d", err);
 				signal_error(err);
 			}
 		}
 
-		gps_manager(&msg);
+		message_handler(&msg);
 	}
 
 	if (is_data_mgr_event(eh)) {
@@ -259,7 +257,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.data = *event
 		};
 
-		gps_manager(&msg);
+		message_handler(&msg);
 	}
 
 	if (is_util_mgr_event(eh)) {
@@ -268,7 +266,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.util = *event
 		};
 
-		gps_manager(&msg);
+		message_handler(&msg);
 	}
 
 	if (is_gps_mgr_event(eh)) {
@@ -277,7 +275,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.gps = *event
 		};
 
-		gps_manager(&msg);
+		message_handler(&msg);
 	}
 
 	return false;
@@ -340,7 +338,7 @@ static void on_state_running_gps_idle(struct gps_msg_data *msg)
 			return;
 		}
 
-		gps_manager_search_start();
+		gps_search_start();
 	}
 }
 
@@ -354,7 +352,7 @@ static void on_all_states(struct gps_msg_data *msg)
 	}
 }
 
-static void gps_manager(struct gps_msg_data *msg)
+static void message_handler(struct gps_msg_data *msg)
 {
 	switch (gps_state) {
 	case GPS_MGR_STATE_INIT:

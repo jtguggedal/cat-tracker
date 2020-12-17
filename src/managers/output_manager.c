@@ -76,6 +76,15 @@ static void signal_error(int err)
 	EVENT_SUBMIT(output_mgr_event);
 }
 
+static void signal_event(enum output_mgr_event_types type)
+{
+	struct output_mgr_event *output_mgr_event = new_output_mgr_event();
+
+	output_mgr_event->type = type;
+
+	EVENT_SUBMIT(output_mgr_event);
+}
+
 static int setup(void)
 {
 	int err;
@@ -342,11 +351,7 @@ static void on_all_states(struct output_msg_data *output_msg)
 
 		output_state = OUTPUT_MGR_STATE_ERROR;
 
-		struct output_mgr_event *output_mgr_event =
-					new_output_mgr_event();
-
-		output_mgr_event->type = OUTPUT_MGR_EVT_SHUTDOWN_READY;
-		EVENT_SUBMIT(output_mgr_event);
+		signal_event(OUTPUT_MGR_EVT_SHUTDOWN_READY);
 	}
 }
 

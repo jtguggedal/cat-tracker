@@ -41,7 +41,7 @@ static void azure_iot_hub_event_handler(struct azure_iot_hub_evt *const evt)
 
 	switch (evt->type) {
 	case AZURE_IOT_HUB_EVT_CONNECTING:
-		LOG_WRN("AZURE_IOT_HUB_EVT_CONNECTING");
+		LOG_DBG("AZURE_IOT_HUB_EVT_CONNECTING");
 		cloud_wrap_evt.type = CLOUD_WRAP_EVT_CONNECTING;
 		notify = true;
 		break;

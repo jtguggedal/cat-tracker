@@ -104,12 +104,31 @@ static void signal_error(int err)
 	EVENT_SUBMIT(cloud_mgr_event);
 }
 
+static void signal_event(enum cloud_mgr_event_types type)
+{
+	struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
+
+	cloud_mgr_event->type = type;
+
+	EVENT_SUBMIT(cloud_mgr_event);
+}
+
 static void signal_data_ack(void *ptr)
 {
 	struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
 
 	cloud_mgr_event->type = CLOUD_MGR_EVT_DATA_ACK;
 	cloud_mgr_event->data.ptr = ptr;
+
+	EVENT_SUBMIT(cloud_mgr_event);
+}
+
+static void signal_config_received(void)
+{
+	struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
+
+	cloud_mgr_event->type = CLOUD_MGR_EVT_CONFIG_RECEIVED;
+	cloud_mgr_event->data.config = copy_cfg;
 
 	EVENT_SUBMIT(cloud_mgr_event);
 }
@@ -230,13 +249,9 @@ static void connect_cloud(void)
  */
 static void connect_check_work_fn(struct k_work *work)
 {
-	struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
-
-	cloud_mgr_event->type = CLOUD_MGR_EVT_CONNECTION_TIMEOUT;
-
 	LOG_DBG("Cloud connection timeout occurred");
 
-	EVENT_SUBMIT(cloud_mgr_event);
+	signal_event(CLOUD_MGR_EVT_CONNECTION_TIMEOUT);
 }
 
 static bool event_handler(const struct event_header *eh)
@@ -400,11 +415,7 @@ static void on_sub_state_cloud_disconnected(struct cloud_msg_data *msg)
 static void on_all_states(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-
-		struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
-
-		cloud_mgr_event->type = CLOUD_MGR_EVT_SHUTDOWN_READY;
-		EVENT_SUBMIT(cloud_mgr_event);
+		signal_event(CLOUD_MGR_EVT_SHUTDOWN_READY);
 	}
 
 	if (is_data_mgr_event(&msg->manager.data.header)) {
@@ -421,23 +432,18 @@ static void on_all_states(struct cloud_msg_data *msg)
 
 static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
 {
-	struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
-
 	switch (evt->type) {
 	case CLOUD_WRAP_EVT_CONNECTING:
 		LOG_DBG("CLOUD_WRAP_EVT_CONNECTING");
-		cloud_mgr_event->type = CLOUD_MGR_EVT_CONNECTING;
-		EVENT_SUBMIT(cloud_mgr_event);
+		signal_event(CLOUD_MGR_EVT_CONNECTING);
 		break;
 	case CLOUD_WRAP_EVT_CONNECTED:
 		LOG_DBG("CLOUD_WRAP_EVT_CONNECTED");
-		cloud_mgr_event->type = CLOUD_MGR_EVT_CONNECTED;
-		EVENT_SUBMIT(cloud_mgr_event);
+		signal_event(CLOUD_MGR_EVT_CONNECTED);
 		break;
 	case CLOUD_WRAP_EVT_DISCONNECTED:
 		LOG_DBG("CLOUD_WRAP_EVT_DISCONNECTED");
-		cloud_mgr_event->type = CLOUD_MGR_EVT_DISCONNECTED;
-		EVENT_SUBMIT(cloud_mgr_event);
+		signal_event(CLOUD_MGR_EVT_DISCONNECTED);
 		break;
 	case CLOUD_WRAP_EVT_DATA_RECEIVED:
 		LOG_DBG("CLOUD_WRAP_EVT_DATA_RECEIVED");
@@ -455,11 +461,7 @@ static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
 		err = cloud_codec_decode_config(evt->data.buf, &copy_cfg);
 		if (err == 0) {
 			LOG_DBG("Device configuration encoded");
-
-			cloud_mgr_event->type = CLOUD_MGR_EVT_CONFIG_RECEIVED;
-			cloud_mgr_event->data.config = copy_cfg;
-
-			EVENT_SUBMIT(cloud_mgr_event);
+			signal_config_received();
 			break;
 		} else if (err == -ENODATA) {
 			LOG_WRN("Device configuration empty!");
@@ -482,8 +484,7 @@ static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
 		break;
 	case CLOUD_WRAP_EVT_FOTA_DONE:
 		LOG_DBG("CLOUD_WRAP_EVT_FOTA_DONE");
-		cloud_mgr_event->type = CLOUD_MGR_EVT_FOTA_DONE;
-		EVENT_SUBMIT(cloud_mgr_event);
+		signal_event(CLOUD_MGR_EVT_FOTA_DONE);
 		break;
 	case CLOUD_WRAP_EVT_FOTA_START:
 		LOG_DBG("CLOUD_WRAP_EVT_FOTA_START");
@@ -496,8 +497,7 @@ static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
 		break;
 	case CLOUD_WRAP_EVT_ERROR:
 		LOG_DBG("CLOUD_WRAP_EVT_ERROR");
-		cloud_mgr_event->type = CLOUD_MGR_EVT_ERROR;
-		EVENT_SUBMIT(cloud_mgr_event);
+		signal_error(evt->err);
 		break;
 	default:
 		break;

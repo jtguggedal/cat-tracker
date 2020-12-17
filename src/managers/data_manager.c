@@ -261,6 +261,16 @@ static void signal_event(enum data_mgr_event_types type)
 	EVENT_SUBMIT(data_mgr_event);
 }
 
+static void config_distribute(enum data_mgr_event_types type)
+{
+	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
+
+	data_mgr_event->type = type;
+	data_mgr_event->data.cfg = current_cfg;
+
+	EVENT_SUBMIT(data_mgr_event);
+}
+
 /* Date and time control */
 
 static void date_time_event_handler(const struct date_time_evt *evt)
@@ -372,11 +382,7 @@ static void data_send(void)
 
 static void config_get(void)
 {
-	struct data_mgr_event *evt = new_data_mgr_event();
-
-	evt->type = DATA_MGR_EVT_CONFIG_GET;
-
-	EVENT_SUBMIT(evt);
+	signal_event(DATA_MGR_EVT_CONFIG_GET);
 }
 
 static void config_send(void)
@@ -437,16 +443,6 @@ static void data_ui_send(void)
 	ui_buf[head_ui_buf].queued = false;
 
 	EVENT_SUBMIT(evt);
-}
-
-static void config_distribute(enum data_mgr_event_types type)
-{
-	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
-
-	data_mgr_event->type = type;
-	data_mgr_event->data.cfg = current_cfg;
-
-	EVENT_SUBMIT(data_mgr_event);
 }
 
 static bool event_handler(const struct event_header *eh)
@@ -534,11 +530,7 @@ static void clear_local_data_list(void)
 
 static void data_send_work_fn(struct k_work *work)
 {
-	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
-
-	data_mgr_event->type = DATA_MGR_EVT_DATA_READY;
-
-	EVENT_SUBMIT(data_mgr_event);
+	signal_event(DATA_MGR_EVT_DATA_READY);
 
 	clear_local_data_list();
 	k_delayed_work_cancel(&data_send_work);
@@ -700,14 +692,10 @@ static void on_all_states(struct data_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-		struct data_mgr_event *data_mgr_event = new_data_mgr_event();
-
-		data_mgr_event->type = DATA_MGR_EVT_SHUTDOWN_READY;
-
 		/* The module doesn't have anything to shut down and can
 		 * report back immediately.
 		 */
-		EVENT_SUBMIT(data_mgr_event);
+		signal_event(DATA_MGR_EVT_SHUTDOWN_READY);
 	}
 
 	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
@@ -732,11 +720,7 @@ static void on_all_states(struct data_msg_data *msg)
 					&msg->manager.ui.data.ui,
 					&head_ui_buf);
 
-		struct data_mgr_event *data_mgr_event = new_data_mgr_event();
-
-		data_mgr_event->type = DATA_MGR_EVT_UI_DATA_READY;
-
-		EVENT_SUBMIT(data_mgr_event);
+		signal_event(DATA_MGR_EVT_UI_DATA_READY);
 		return;
 	}
 

@@ -161,17 +161,18 @@ static void signal_error(int err)
 {
 	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
 
-	app_mgr_event->err = err;
 	app_mgr_event->type = APP_MGR_EVT_ERROR;
+	app_mgr_event->err = err;
 
 	EVENT_SUBMIT(app_mgr_event);
 }
 
-static void signal_app_start(void)
+static void signal_event(enum app_mgr_event_type type)
 {
 	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
 
-	app_mgr_event->type = APP_MGR_EVT_START;
+	app_mgr_event->type = type;
+
 	EVENT_SUBMIT(app_mgr_event);
 }
 
@@ -237,15 +238,6 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
-static void config_send(void)
-{
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-	app_mgr_event->type = APP_MGR_EVT_CONFIG_SEND;
-
-	EVENT_SUBMIT(app_mgr_event);
-}
-
 static void data_get_init(void)
 {
 	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
@@ -292,11 +284,7 @@ static void data_get_all(void)
 static void data_sample_timer_handler(struct k_timer *timer)
 {
 	ARG_UNUSED(timer);
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-	app_mgr_event->type = APP_MGR_EVT_DATA_GET_ALL;
-
-	EVENT_SUBMIT(app_mgr_event);
+	signal_event(APP_MGR_EVT_DATA_GET_ALL);
 }
 
 /* Message handler for APP_STATE_INIT. */
@@ -349,7 +337,7 @@ void on_sub_state_passive(struct app_msg_data *msg)
 		app_cfg = msg->manager.data.data.cfg;
 
 		/*Acknowledge configuration to cloud. */
-		config_send();
+		signal_event(APP_MGR_EVT_CONFIG_SEND);
 
 		if (app_cfg.act) {
 			LOG_INF("Device mode: Active");
@@ -401,7 +389,7 @@ static void on_sub_state_active(struct app_msg_data *msg)
 		app_cfg = msg->manager.data.data.cfg;
 
 		/* Acknowledge configuration to cloud. */
-		config_send();
+		signal_event(APP_MGR_EVT_CONFIG_SEND);
 
 		if (!app_cfg.act) {
 			LOG_INF("Device mode: Passive");
@@ -434,10 +422,7 @@ static void on_all_events(struct app_msg_data *msg)
 		k_timer_stop(&movement_timeout_timer);
 		k_timer_stop(&movement_resolution_timer);
 
-		struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-		app_mgr_event->type = APP_MGR_EVT_SHUTDOWN_READY;
-		EVENT_SUBMIT(app_mgr_event);
+		signal_event(APP_MGR_EVT_SHUTDOWN_READY);
 	}
 }
 
@@ -458,7 +443,7 @@ void main(void)
 		k_sleep(K_SECONDS(5));
 		sys_reboot(SYS_REBOOT_COLD);
 	} else {
-		signal_app_start();
+		signal_event(APP_MGR_EVT_START);
 	}
 
 #if defined(CONFIG_WATCHDOG)

@@ -44,15 +44,6 @@ static struct module_data self = {
 	.msg_q = &msgq_sensor,
 };
 
-static void notify_sensor_manager(struct sensor_msg_data *data)
-{
-	while (k_msgq_put(&msgq_sensor, data, K_NO_WAIT) != 0) {
-		/* message queue is full: purge old data & try again */
-		k_msgq_purge(&msgq_sensor);
-		LOG_ERR("Sensor manager message queue full, queue purged");
-	}
-}
-
 static void signal_error(int err)
 {
 	struct sensor_mgr_event *sensor_mgr_event = new_sensor_mgr_event();
@@ -64,8 +55,7 @@ static void signal_error(int err)
 }
 
 #if defined(CONFIG_EXTERNAL_SENSORS)
-static void sensor_manager_accelerometer_data_send(
-			const struct ext_sensor_evt *const acc_data)
+static void movement_data_send(const struct ext_sensor_evt *const acc_data)
 {
 	static int buf_entry_try_again_timeout;
 
@@ -98,7 +88,7 @@ static void ext_sensor_handler(const struct ext_sensor_evt *const evt)
 {
 	switch (evt->type) {
 	case EXT_SENSOR_EVT_ACCELEROMETER_TRIGGER:
-		sensor_manager_accelerometer_data_send(evt);
+		movement_data_send(evt);
 		break;
 	default:
 		break;
@@ -106,7 +96,7 @@ static void ext_sensor_handler(const struct ext_sensor_evt *const evt)
 }
 #endif
 
-static int sensor_manager_data_get(void)
+static int environmental_data_get(void)
 {
 	struct sensor_mgr_event *sensor_mgr_event;
 #if defined(CONFIG_EXTERNAL_SENSORS)
@@ -153,7 +143,7 @@ static int sensor_manager_data_get(void)
 	return 0;
 }
 
-static int sensor_manager_setup(void)
+static int setup(void)
 {
 #if defined(CONFIG_EXTERNAL_SENSORS)
 	int err;
@@ -175,7 +165,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.app = *event
 		};
 
-		notify_sensor_manager(&sensor_msg);
+		module_enqueue_msg(&self, &sensor_msg);
 	}
 
 	if (is_data_mgr_event(eh)) {
@@ -184,7 +174,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.data = *event
 		};
 
-		notify_sensor_manager(&sensor_msg);
+		module_enqueue_msg(&self, &sensor_msg);
 	}
 
 	if (is_util_mgr_event(eh)) {
@@ -193,14 +183,14 @@ static bool event_handler(const struct event_header *eh)
 			.manager.util = *event
 		};
 
-		notify_sensor_manager(&sensor_msg);
+		module_enqueue_msg(&self, &sensor_msg);
 	}
 
 	return false;
 }
 
-static bool sensor_data_requested(enum app_mgr_data_type *data_list,
-				  size_t count)
+static bool environmental_data_requested(enum app_mgr_data_type *data_list,
+					 size_t count)
 {
 	for (size_t i = 0; i < count; i++) {
 		if (data_list[i] == APP_DATA_ENVIRONMENTAL) {
@@ -232,7 +222,7 @@ static void on_state_running(struct sensor_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
-		if (!sensor_data_requested(
+		if (!environmental_data_requested(
 			msg->manager.app.data_list,
 			msg->manager.app.count)) {
 			return;
@@ -240,9 +230,9 @@ static void on_state_running(struct sensor_msg_data *msg)
 
 		int err;
 
-		err = sensor_manager_data_get();
+		err = environmental_data_get();
 		if (err) {
-			LOG_ERR("sensor_manager_data_get, error: %d", err);
+			LOG_ERR("environmental_data_get, error: %d", err);
 			signal_error(err);
 		}
 	}
@@ -269,9 +259,9 @@ static void sensor_manager(void)
 
 	atomic_inc(&manager_count);
 
-	err = sensor_manager_setup();
+	err = setup();
 	if (err) {
-		LOG_ERR("sensor_manager_setup, error: %d", err);
+		LOG_ERR("setup, error: %d", err);
 		signal_error(err);
 	}
 

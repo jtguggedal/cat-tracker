@@ -114,7 +114,7 @@ static void signal_data_ack(void *ptr)
 	EVENT_SUBMIT(cloud_mgr_event);
 }
 
-static void cloud_manager_data_send(struct data_mgr_event *evt)
+static void data_send(struct data_mgr_event *evt)
 {
 	int err;
 
@@ -130,7 +130,7 @@ static void cloud_manager_data_send(struct data_mgr_event *evt)
 	}
 }
 
-static void cloud_manager_config_send(struct data_mgr_event *evt)
+static void config_send(struct data_mgr_event *evt)
 {
 	int err;
 
@@ -146,7 +146,7 @@ static void cloud_manager_config_send(struct data_mgr_event *evt)
 	}
 }
 
-static void cloud_manager_config_get(void)
+static void config_get(void)
 {
 	int err;
 
@@ -158,7 +158,7 @@ static void cloud_manager_config_get(void)
 	}
 }
 
-static void cloud_manager_batch_data_send(struct data_mgr_event *evt)
+static void batch_data_send(struct data_mgr_event *evt)
 {
 	int err;
 
@@ -174,7 +174,7 @@ static void cloud_manager_batch_data_send(struct data_mgr_event *evt)
 	}
 }
 
-static void cloud_manager_ui_data_send(struct data_mgr_event *evt)
+static void ui_data_send(struct data_mgr_event *evt)
 {
 	int err;
 
@@ -216,7 +216,9 @@ static void connect_cloud(void)
 
 	connect_retries++;
 
-	LOG_WRN("New connection attempt in %d seconds", backoff_sec);
+	LOG_WRN("Cloud connection establishment in progress");
+	LOG_WRN("New connection attempt in %d seconds if not successful",
+		backoff_sec);
 
 	/* Start timer to check connection status after backoff */
 	k_delayed_work_submit(&connect_check_work, K_SECONDS(backoff_sec));
@@ -361,23 +363,23 @@ static void on_sub_state_cloud_connected(struct cloud_msg_data *msg)
 #endif /* CONFIG_AGPS && CONFIG_AGPS_SRC_NRF_CLOUD */
 
 	if (IS_EVENT(msg, data, DATA_MGR_EVT_DATA_SEND)) {
-		cloud_manager_data_send(&msg->manager.data);
+		data_send(&msg->manager.data);
 	}
 
 	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_SEND)) {
-		cloud_manager_config_send(&msg->manager.data);
+		config_send(&msg->manager.data);
 	}
 
 	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_GET)) {
-		cloud_manager_config_get();
+		config_get();
 	}
 
 	if (IS_EVENT(msg, data, DATA_MGR_EVT_DATA_SEND_BATCH)) {
-		cloud_manager_batch_data_send(&msg->manager.data);
+		batch_data_send(&msg->manager.data);
 	}
 
 	if (IS_EVENT(msg, data, DATA_MGR_EVT_UI_DATA_SEND)) {
-		cloud_manager_ui_data_send(&msg->manager.data);
+		ui_data_send(&msg->manager.data);
 	}
 }
 
@@ -503,7 +505,7 @@ static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
 	}
 }
 
-static int cloud_manager_setup(void)
+static int setup(void)
 {
 	int err;
 
@@ -534,9 +536,9 @@ static void cloud_manager(void)
 
 	k_delayed_work_init(&connect_check_work, connect_check_work_fn);
 
-	err = cloud_manager_setup();
+	err = setup();
 	if (err) {
-		LOG_ERR("cloud_manager_setup, error %d", err);
+		LOG_ERR("setup, error %d", err);
 		signal_error(err);
 	}
 

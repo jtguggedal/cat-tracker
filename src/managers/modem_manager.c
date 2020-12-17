@@ -258,7 +258,7 @@ static void check_modem_fw_version(void)
 	modem_fw_version_checked = true;
 }
 
-static int modem_manager_modem_data_get(void)
+static int modem_data_get(void)
 {
 	int err;
 
@@ -326,7 +326,7 @@ static bool battery_data_requested(enum app_mgr_data_type *data_list,
 	return false;
 }
 
-static int modem_manager_battery_data_get(void)
+static int battery_data_get(void)
 {
 	int err;
 
@@ -538,7 +538,7 @@ static void on_all_states(struct modem_msg_data *msg)
 
 			int err;
 
-			err = modem_manager_modem_data_get();
+			err = modem_data_get();
 			if (err) {
 				signal_error(err);
 			}
@@ -549,7 +549,7 @@ static void on_all_states(struct modem_msg_data *msg)
 
 			int err;
 
-			err = modem_manager_battery_data_get();
+			err = battery_data_get();
 			if (err) {
 				signal_error(err);
 			}

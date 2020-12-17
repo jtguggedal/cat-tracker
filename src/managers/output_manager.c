@@ -64,7 +64,7 @@ static struct k_delayed_work led_pat_gps_work;
 
 K_MSGQ_DEFINE(msgq_output, sizeof(struct output_msg_data), 10, 4);
 
-static void output_manager(struct output_msg_data *msg);
+static void message_handler(struct output_msg_data *msg);
 
 static void signal_error(int err)
 {
@@ -76,7 +76,7 @@ static void signal_error(int err)
 	EVENT_SUBMIT(output_mgr_event);
 }
 
-static int output_manager_setup(void)
+static int setup(void)
 {
 	int err;
 
@@ -123,9 +123,9 @@ static bool event_handler(const struct event_header *eh)
 			k_delayed_work_init(&led_pat_passive_work,
 					    led_pat_passive_work_fn);
 
-			err = output_manager_setup();
+			err = setup();
 			if (err) {
-				LOG_ERR("output_manager_setup, error: %d", err);
+				LOG_ERR("setup, error: %d", err);
 				signal_error(err);
 			}
 		}
@@ -137,7 +137,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.data = *event
 		};
 
-		output_manager(&output_msg);
+		message_handler(&output_msg);
 	}
 
 	if (is_modem_mgr_event(eh)) {
@@ -146,7 +146,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.modem = *event
 		};
 
-		output_manager(&output_msg);
+		message_handler(&output_msg);
 	}
 
 	if (is_gps_mgr_event(eh)) {
@@ -155,7 +155,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.gps = *event
 		};
 
-		output_manager(&output_msg);
+		message_handler(&output_msg);
 	}
 
 	if (is_util_mgr_event(eh)) {
@@ -164,7 +164,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.util = *event
 		};
 
-		output_manager(&output_msg);
+		message_handler(&output_msg);
 	}
 
 	return false;
@@ -350,7 +350,7 @@ static void on_all_states(struct output_msg_data *output_msg)
 	}
 }
 
-static void output_manager(struct output_msg_data *msg)
+static void message_handler(struct output_msg_data *msg)
 {
 	switch (output_state) {
 	case OUTPUT_MGR_STATE_INIT:

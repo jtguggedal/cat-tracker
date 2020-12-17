@@ -52,8 +52,8 @@ struct app_msg_data {
 
 /* Application manager super states. */
 enum app_state {
-	APP_MGR_STATE_INIT,
-	APP_MGR_STATE_RUNNING
+	APP_STATE_INIT,
+	APP_STATE_RUNNING
 } app_state;
 
 /* Application sub states. The application can be in either active or passive
@@ -108,10 +108,10 @@ static struct module_data self = {
 static char *state2str(enum app_state state)
 {
 	switch (state) {
-	case APP_MGR_STATE_INIT:
-		return "APP_MGR_STATE_INIT";
-	case APP_MGR_STATE_RUNNING:
-		return "APP_MGR_STATE_RUNNING";
+	case APP_STATE_INIT:
+		return "APP_STATE_INIT";
+	case APP_STATE_RUNNING:
+		return "APP_STATE_RUNNING";
 	default:
 		return "Unknown";
 	}
@@ -167,65 +167,11 @@ static void signal_error(int err)
 	EVENT_SUBMIT(app_mgr_event);
 }
 
-static void config_send(void)
+static void signal_app_start(void)
 {
 	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
 
-	app_mgr_event->type = APP_MGR_EVT_CONFIG_SEND;
-
-	EVENT_SUBMIT(app_mgr_event);
-}
-
-static void data_get_all(void)
-{
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-	/* Specify which data that is to be included in the transmission. */
-	app_mgr_event->data_list[0] = APP_DATA_MODEM;
-	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
-	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
-	app_mgr_event->data_list[3] = APP_DATA_GNSS;
-
-	/* Set list count to number of data types passed in app_mgr_event. */
-	app_mgr_event->count = 4;
-	app_mgr_event->type = APP_MGR_EVT_DATA_GET;
-
-	/* Specify a timeout that each manager has to fetch data. If data is not
-	 * fetched within this timeout, the data that is available is sent.
-	 */
-	app_mgr_event->timeout = app_cfg.gpst + 60;
-
-	EVENT_SUBMIT(app_mgr_event);
-}
-
-static void data_get_init(void)
-{
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-	/* Specify which data that is to be included in the transmission. */
-	app_mgr_event->data_list[0] = APP_DATA_MODEM;
-	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
-	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
-
-	/* Set list count to number of data types passed in app_mgr_event. */
-	app_mgr_event->count = 3;
-	app_mgr_event->type = APP_MGR_EVT_DATA_GET;
-
-	/* Specify a timeout that each manager has to fetch data. If data is not
-	 * fetched within this timeout, the data that is available is sent.
-	 */
-	app_mgr_event->timeout = 10;
-
-	EVENT_SUBMIT(app_mgr_event);
-}
-
-static void data_sample_timer_handler(struct k_timer *timer)
-{
-	ARG_UNUSED(timer);
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-	app_mgr_event->type = APP_MGR_EVT_DATA_GET_ALL;
-
+	app_mgr_event->type = APP_MGR_EVT_START;
 	EVENT_SUBMIT(app_mgr_event);
 }
 
@@ -291,6 +237,69 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
+static void config_send(void)
+{
+	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
+
+	app_mgr_event->type = APP_MGR_EVT_CONFIG_SEND;
+
+	EVENT_SUBMIT(app_mgr_event);
+}
+
+static void data_get_init(void)
+{
+	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
+
+	/* Specify which data that is to be included in the transmission. */
+	app_mgr_event->data_list[0] = APP_DATA_MODEM;
+	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
+	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
+
+	/* Set list count to number of data types passed in app_mgr_event. */
+	app_mgr_event->count = 3;
+	app_mgr_event->type = APP_MGR_EVT_DATA_GET;
+
+	/* Specify a timeout that each manager has to fetch data. If data is not
+	 * fetched within this timeout, the data that is available is sent.
+	 */
+	app_mgr_event->timeout = 10;
+
+	EVENT_SUBMIT(app_mgr_event);
+}
+
+static void data_get_all(void)
+{
+	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
+
+	/* Specify which data that is to be included in the transmission. */
+	app_mgr_event->data_list[0] = APP_DATA_MODEM;
+	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
+	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
+	app_mgr_event->data_list[3] = APP_DATA_GNSS;
+
+	/* Set list count to number of data types passed in app_mgr_event. */
+	app_mgr_event->count = 4;
+	app_mgr_event->type = APP_MGR_EVT_DATA_GET;
+
+	/* Specify a timeout that each manager has to fetch data. If data is not
+	 * fetched within this timeout, the data that is available is sent.
+	 */
+	app_mgr_event->timeout = app_cfg.gpst + 60;
+
+	EVENT_SUBMIT(app_mgr_event);
+}
+
+static void data_sample_timer_handler(struct k_timer *timer)
+{
+	ARG_UNUSED(timer);
+	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
+
+	app_mgr_event->type = APP_MGR_EVT_DATA_GET_ALL;
+
+	EVENT_SUBMIT(app_mgr_event);
+}
+
+/* Message handler for APP_STATE_INIT. */
 static void on_state_init(struct app_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_INIT)) {
@@ -314,12 +323,25 @@ static void on_state_init(struct app_msg_data *msg)
 				K_SECONDS(app_cfg.movt));
 		}
 
-		state_set(APP_MGR_STATE_RUNNING);
+		state_set(APP_STATE_RUNNING);
 		sub_state_set(app_cfg.act ? APP_SUB_STATE_ACTIVE_MODE :
 					    APP_SUB_STATE_PASSIVE_MODE);
 	}
 }
 
+/* Message handler for APP_STATE_RUNNING. */
+static void on_state_running(struct app_msg_data *msg)
+{
+	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_DATE_TIME_OBTAINED)) {
+		data_get_init();
+	}
+
+	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET_ALL)) {
+		data_get_all();
+	}
+}
+
+/* Message handler for APP_SUB_STATE_PASSIVE_MODE. */
 void on_sub_state_passive(struct app_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
@@ -371,6 +393,7 @@ void on_sub_state_passive(struct app_msg_data *msg)
 	}
 }
 
+/* Message handler for APP_SUB_STATE_ACTIVE_MODE. */
 static void on_sub_state_active(struct app_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
@@ -403,17 +426,7 @@ static void on_sub_state_active(struct app_msg_data *msg)
 	}
 }
 
-static void on_state_running(struct app_msg_data *msg)
-{
-	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_DATE_TIME_OBTAINED)) {
-		data_get_init();
-	}
-
-	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET_ALL)) {
-		data_get_all();
-	}
-}
-
+/* Message handler for all states. */
 static void on_all_events(struct app_msg_data *msg)
 {
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
@@ -428,14 +441,6 @@ static void on_all_events(struct app_msg_data *msg)
 	}
 }
 
-static void signal_app_start(void)
-{
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-	app_mgr_event->type = APP_MGR_EVT_START;
-	EVENT_SUBMIT(app_mgr_event);
-}
-
 void main(void)
 {
 	int err;
@@ -446,7 +451,14 @@ void main(void)
 	atomic_inc(&manager_count);
 
 	if (event_manager_init()) {
-		LOG_ERR("Event manager not initialized");
+		/* Without the event manager, the application will not work
+		 * as intended. A reboot is required in an attempt to recover.
+		 */
+		LOG_ERR("Event manager could not be initialized, rebooting...");
+		k_sleep(K_SECONDS(5));
+		sys_reboot(SYS_REBOOT_COLD);
+	} else {
+		signal_app_start();
 	}
 
 #if defined(CONFIG_WATCHDOG)
@@ -457,16 +469,14 @@ void main(void)
 	}
 #endif
 
-	signal_app_start();
-
 	while (true) {
 		module_get_next_msg(&self, &msg);
 
 		switch (app_state) {
-		case APP_MGR_STATE_INIT:
+		case APP_STATE_INIT:
 			on_state_init(&msg);
 			break;
-		case APP_MGR_STATE_RUNNING:
+		case APP_STATE_RUNNING:
 			switch (app_sub_state) {
 			case APP_SUB_STATE_ACTIVE_MODE:
 				on_sub_state_active(&msg);
@@ -491,10 +501,10 @@ void main(void)
 }
 
 EVENT_LISTENER(MODULE, event_handler);
+EVENT_SUBSCRIBE_EARLY(MODULE, cloud_mgr_event);
 EVENT_SUBSCRIBE(MODULE, app_mgr_event);
 EVENT_SUBSCRIBE(MODULE, data_mgr_event);
 EVENT_SUBSCRIBE(MODULE, util_mgr_event);
-EVENT_SUBSCRIBE_EARLY(MODULE, cloud_mgr_event);
 EVENT_SUBSCRIBE_FINAL(MODULE, ui_mgr_event);
 EVENT_SUBSCRIBE_FINAL(MODULE, sensor_mgr_event);
 EVENT_SUBSCRIBE_FINAL(MODULE, modem_mgr_event);

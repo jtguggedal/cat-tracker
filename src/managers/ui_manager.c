@@ -39,6 +39,15 @@ static void signal_error(int err)
 	EVENT_SUBMIT(ui_mgr_event);
 }
 
+static void signal_event(enum ui_mgr_event_types type)
+{
+	struct ui_mgr_event *ui_mgr_event = new_ui_mgr_event();
+
+	ui_mgr_event->type = type;
+
+	EVENT_SUBMIT(ui_mgr_event);
+}
+
 static void button_handler(uint32_t button_states, uint32_t has_changed)
 {
 	static int try_again_timeout;
@@ -115,13 +124,8 @@ static void message_handler(struct ui_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-		struct ui_mgr_event *ui_mgr_event = new_ui_mgr_event();
-
-		ui_mgr_event->type = UI_MGR_EVT_SHUTDOWN_READY;
-		EVENT_SUBMIT(ui_mgr_event);
+		signal_event(UI_MGR_EVT_SHUTDOWN_READY);
 	}
-
-
 }
 
 static bool event_handler(const struct event_header *eh)

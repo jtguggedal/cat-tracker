@@ -54,6 +54,15 @@ static void signal_error(int err)
 	EVENT_SUBMIT(sensor_mgr_event);
 }
 
+static void signal_event(enum sensor_mgr_event_types type)
+{
+	struct sensor_mgr_event *sensor_mgr_event = new_sensor_mgr_event();
+
+	sensor_mgr_event->type = type;
+
+	EVENT_SUBMIT(sensor_mgr_event);
+}
+
 #if defined(CONFIG_EXTERNAL_SENSORS)
 static void movement_data_send(const struct ext_sensor_evt *const acc_data)
 {
@@ -241,11 +250,7 @@ static void on_state_running(struct sensor_msg_data *msg)
 static void on_all_states(struct sensor_msg_data *msg)
 {
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-
-		struct sensor_mgr_event *sensor_evt = new_sensor_mgr_event();
-
-		sensor_evt->type = SENSOR_MGR_EVT_SHUTDOWN_READY;
-		EVENT_SUBMIT(sensor_evt);
+		signal_event(SENSOR_MGR_EVT_SHUTDOWN_READY);
 	}
 }
 

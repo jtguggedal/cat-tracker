@@ -559,11 +559,7 @@ static void on_all_states(struct modem_msg_data *msg)
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
 		lte_lc_power_off();
 		connection_state_set(LTE_STATE_SHUTTING_DOWN);
-
-		struct modem_mgr_event *modem_mgr_event = new_modem_mgr_event();
-
-		modem_mgr_event->type = MODEM_MGR_EVT_SHUTDOWN_READY;
-		EVENT_SUBMIT(modem_mgr_event);
+		signal_event(MODEM_MGR_EVT_SHUTDOWN_READY);
 	}
 }
 

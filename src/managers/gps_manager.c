@@ -345,10 +345,7 @@ static void on_state_running_gps_idle(struct gps_msg_data *msg)
 static void on_all_states(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-		struct gps_mgr_event *gps_mgr_event = new_gps_mgr_event();
-
-		gps_mgr_event->type = GPS_MGR_EVT_SHUTDOWN_READY;
-		EVENT_SUBMIT(gps_mgr_event);
+		signal_event(GPS_MGR_EVT_SHUTDOWN_READY);
 	}
 }
 

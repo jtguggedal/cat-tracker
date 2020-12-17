@@ -332,7 +332,7 @@ static void on_state_init(struct app_msg_data *msg)
 /* Message handler for APP_STATE_RUNNING. */
 static void on_state_running(struct app_msg_data *msg)
 {
-	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_DATE_TIME_OBTAINED)) {
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_DATE_TIME_OBTAINED)) {
 		data_get_init();
 	}
 

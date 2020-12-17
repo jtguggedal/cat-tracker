@@ -252,6 +252,39 @@ static void signal_error(int err)
 	EVENT_SUBMIT(data_mgr_event);
 }
 
+static void signal_event(enum data_mgr_event_types type)
+{
+	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
+
+	data_mgr_event->type = type;
+
+	EVENT_SUBMIT(data_mgr_event);
+}
+
+/* Date and time control */
+
+static void date_time_event_handler(const struct date_time_evt *evt)
+{
+	switch (evt->type) {
+	case DATE_TIME_OBTAINED_MODEM:
+		/* Fall through. */
+	case DATE_TIME_OBTAINED_NTP:
+		/* Fall through. */
+	case DATE_TIME_OBTAINED_EXT:
+		signal_event(DATA_MGR_EVT_DATE_TIME_OBTAINED);
+
+		/* De-register handler. At this point the application will have
+		 * date time to depend on indefinitely until a reboot occurs.
+		 */
+		date_time_register_handler(NULL);
+		break;
+	case DATE_TIME_NOT_OBTAINED:
+		break;
+	default:
+		break;
+	}
+}
+
 /* This function allocates buffer on the heap, which needs to be freed afte use.
  */
 static void data_send(void)
@@ -544,6 +577,7 @@ static void data_list_set(enum app_mgr_data_type *data_list, size_t count)
 static void on_cloud_state_disconnected(struct data_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
+		date_time_update_async(date_time_event_handler);
 		state_set(CLOUD_STATE_CONNECTED);
 	}
 }

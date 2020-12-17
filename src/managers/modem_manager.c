@@ -11,7 +11,6 @@
 
 #include <modem/lte_lc.h>
 #include <modem/modem_info.h>
-#include <date_time.h>
 
 #define MODULE modem_manager
 
@@ -186,32 +185,6 @@ static void signal_edrx_update(float edrx, float ptw)
 
 	EVENT_SUBMIT(evt);
 }
-
-
-/* Date and time control */
-
-static void date_time_mgr_event_handler(const struct date_time_evt *evt)
-{
-	switch (evt->type) {
-	case DATE_TIME_OBTAINED_MODEM:
-		/* Fall through. */
-	case DATE_TIME_OBTAINED_NTP:
-		/* Fall through. */
-	case DATE_TIME_OBTAINED_EXT:
-		signal_event(MODEM_MGR_EVT_DATE_TIME_OBTAINED);
-
-		/* De-register handler. At this point the application will have
-		 * date time to depend on indefinitely until a reboot occurs.
-		 */
-		date_time_register_handler(NULL);
-		break;
-	case DATE_TIME_NOT_OBTAINED:
-		break;
-	default:
-		break;
-	}
-}
-
 
 /* Modem info handling */
 
@@ -507,10 +480,6 @@ static void on_lte_state_disconnected(struct modem_msg_data *msg)
 	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_LTE_CONNECTING)) {
 		connection_state_set(LTE_STATE_CONNECTING);
 	}
-
-	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
-		date_time_update_async(date_time_mgr_event_handler);
-	}
 }
 
 static void on_lte_state_connecting(struct modem_msg_data *msg)
@@ -537,10 +506,6 @@ static void on_lte_state_connected(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_LTE_DISCONNECTED)) {
 		connection_state_set(LTE_STATE_DISCONNECTED);
-	}
-
-	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
-		date_time_update_async(date_time_mgr_event_handler);
 	}
 }
 

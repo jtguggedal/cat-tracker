@@ -39,9 +39,6 @@ static int log_modem_mgr_event(const struct event_header *eh, char *buf,
 	case MODEM_MGR_EVT_BATTERY_DATA_READY:
 		strcpy(event_name, "MODEM_MGR_EVT_BATTERY_DATA_READY");
 		break;
-	case MODEM_MGR_EVT_DATE_TIME_OBTAINED:
-		strcpy(event_name, "MODEM_MGR_EVT_DATE_TIME_OBTAINED");
-		break;
 	case MODEM_MGR_EVT_SHUTDOWN_READY:
 		strcpy(event_name, "MODEM_MGR_EVT_SHUTDOWN_READY");
 		break;

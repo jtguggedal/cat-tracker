@@ -45,6 +45,9 @@ static int log_data_mgr_event(const struct event_header *eh, char *buf,
 	case DATA_MGR_EVT_SHUTDOWN_READY:
 		strcpy(event_name, "DATA_MGR_EVT_SHUTDOWN_READY");
 		break;
+	case DATA_MGR_EVT_DATE_TIME_OBTAINED:
+		strcpy(event_name, "DATA_MGR_EVT_DATE_TIME_OBTAINED");
+		break;
 	case DATA_MGR_EVT_ERROR:
 		strcpy(event_name, "DATA_MGR_EVT_ERROR");
 		return snprintf(buf, buf_len, "%s - Error code %d",

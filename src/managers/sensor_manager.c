@@ -111,15 +111,16 @@ static int sensor_manager_data_get(void)
 	struct sensor_mgr_event *sensor_mgr_event;
 #if defined(CONFIG_EXTERNAL_SENSORS)
 	int err;
+	double temp, hum;
 
 	/* Request data from external sensors. */
-	err = ext_sensors_temperature_get(&sensor_mgr_event->data.sensors.temp);
+	err = ext_sensors_temperature_get(&temp);
 	if (err) {
 		LOG_ERR("temperature_get, error: %d", err);
 		return err;
 	}
 
-	err = ext_sensors_humidity_get(&sensor_mgr_event->data.sensors.hum);
+	err = ext_sensors_humidity_get(&hum);
 	if (err) {
 		LOG_ERR("temperature_get, error: %d", err);
 		return err;
@@ -127,6 +128,8 @@ static int sensor_manager_data_get(void)
 
 	sensor_mgr_event = new_sensor_mgr_event();
 	sensor_mgr_event->data.sensors.env_ts = k_uptime_get();
+	sensor_mgr_event->data.sensors.temp = temp;
+	sensor_mgr_event->data.sensors.hum = hum;
 	sensor_mgr_event->data.sensors.queued = true;
 	sensor_mgr_event->type = SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY;
 #else

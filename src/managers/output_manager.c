@@ -24,7 +24,9 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
-extern atomic_t manager_count;
+static struct module_data self = {
+	.name = "output",
+};
 
 struct output_msg_data {
 	union {
@@ -66,25 +68,6 @@ K_MSGQ_DEFINE(msgq_output, sizeof(struct output_msg_data), 10, 4);
 
 static void message_handler(struct output_msg_data *msg);
 
-static void signal_error(int err)
-{
-	struct output_mgr_event *output_mgr_event = new_output_mgr_event();
-
-	output_mgr_event->type = OUTPUT_MGR_EVT_ERROR;
-	output_mgr_event->err = err;
-
-	EVENT_SUBMIT(output_mgr_event);
-}
-
-static void signal_event(enum output_mgr_event_types type)
-{
-	struct output_mgr_event *output_mgr_event = new_output_mgr_event();
-
-	output_mgr_event->type = type;
-
-	EVENT_SUBMIT(output_mgr_event);
-}
-
 static int setup(void)
 {
 	int err;
@@ -121,23 +104,7 @@ static bool event_handler(const struct event_header *eh)
 			.manager.app = *event
 		};
 
-		if (IS_EVENT((&msg), app, APP_MGR_EVT_START)) {
-			int err;
-
-			atomic_inc(&manager_count);
-			k_delayed_work_init(&led_pat_gps_work,
-					    led_pat_gps_work_fn);
-			k_delayed_work_init(&led_pat_active_work,
-					    led_pat_active_work_fn);
-			k_delayed_work_init(&led_pat_passive_work,
-					    led_pat_passive_work_fn);
-
-			err = setup();
-			if (err) {
-				LOG_ERR("setup, error: %d", err);
-				signal_error(err);
-			}
-		}
+		message_handler(&msg);
 	}
 
 	if (is_data_mgr_event(eh)) {
@@ -319,39 +286,48 @@ static void on_sub_state_active(struct output_msg_data *output_msg)
 	}
 }
 
-static void on_sub_state_passive(struct output_msg_data *output_msg)
+static void on_sub_state_passive(struct output_msg_data *msg)
 {
-	if (is_data_mgr_event(&output_msg->manager.data.header)) {
-		switch (output_msg->manager.data.type) {
-		case DATA_MGR_EVT_CONFIG_READY:
-			if (output_msg->manager.data.data.cfg.act) {
-				output_sub_state = OUTPUT_MGR_SUB_STATE_ACTIVE;
-			}
-			break;
-		default:
-			break;
+	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
+		if (msg->manager.data.data.cfg.act) {
+			output_sub_state = OUTPUT_MGR_SUB_STATE_ACTIVE;
 		}
 	}
 }
 
-static void on_state_running(struct output_msg_data *output_msg)
+static void on_state_running(struct output_msg_data *msg)
 {
-	if (is_modem_mgr_event(&output_msg->manager.modem.header) &&
-		output_msg->manager.modem.type ==
-				MODEM_MGR_EVT_LTE_CONNECTING) {
+	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_LTE_CONNECTING)) {
 		ui_led_set_pattern(UI_LTE_CONNECTING);
 	}
 }
 
-static void on_all_states(struct output_msg_data *output_msg)
+static void on_all_states(struct output_msg_data *msg)
 {
-	if (is_util_mgr_event(&output_msg->manager.util.header) &&
-	    output_msg->manager.util.type == UTIL_MGR_EVT_SHUTDOWN_REQUEST) {
+	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
+		int err;
+
+		module_start(&self);
+		k_delayed_work_init(&led_pat_gps_work,
+					led_pat_gps_work_fn);
+		k_delayed_work_init(&led_pat_active_work,
+					led_pat_active_work_fn);
+		k_delayed_work_init(&led_pat_passive_work,
+					led_pat_passive_work_fn);
+
+		err = setup();
+		if (err) {
+			LOG_ERR("setup, error: %d", err);
+			SEND_ERROR(output, OUTPUT_MGR_EVT_ERROR, err);
+		}
+	}
+
+	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
 		ui_led_set_pattern(UI_LED_ERROR_SYSTEM_FAULT);
 
 		output_state = OUTPUT_MGR_STATE_ERROR;
 
-		signal_event(OUTPUT_MGR_EVT_SHUTDOWN_READY);
+		SEND_EVENT(output, OUTPUT_MGR_EVT_SHUTDOWN_READY);
 	}
 }
 

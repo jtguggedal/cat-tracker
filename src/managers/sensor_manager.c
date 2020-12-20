@@ -22,8 +22,6 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(sensor_manager, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
-extern atomic_t manager_count;
-
 struct sensor_msg_data {
 	union {
 		struct app_mgr_event app;
@@ -41,27 +39,9 @@ enum sensor_manager_state {
 K_MSGQ_DEFINE(msgq_sensor, sizeof(struct sensor_msg_data), 10, 4);
 
 static struct module_data self = {
+	.name = "sensor",
 	.msg_q = &msgq_sensor,
 };
-
-static void signal_error(int err)
-{
-	struct sensor_mgr_event *sensor_mgr_event = new_sensor_mgr_event();
-
-	sensor_mgr_event->type = SENSOR_MGR_EVT_ERROR;
-	sensor_mgr_event->data.err = err;
-
-	EVENT_SUBMIT(sensor_mgr_event);
-}
-
-static void signal_event(enum sensor_mgr_event_types type)
-{
-	struct sensor_mgr_event *sensor_mgr_event = new_sensor_mgr_event();
-
-	sensor_mgr_event->type = type;
-
-	EVENT_SUBMIT(sensor_mgr_event);
-}
 
 #if defined(CONFIG_EXTERNAL_SENSORS)
 static void movement_data_send(const struct ext_sensor_evt *const acc_data)
@@ -242,7 +222,7 @@ static void on_state_running(struct sensor_msg_data *msg)
 		err = environmental_data_get();
 		if (err) {
 			LOG_ERR("environmental_data_get, error: %d", err);
-			signal_error(err);
+			SEND_ERROR(sensor, SENSOR_MGR_EVT_ERROR, err);
 		}
 	}
 }
@@ -250,7 +230,7 @@ static void on_state_running(struct sensor_msg_data *msg)
 static void on_all_states(struct sensor_msg_data *msg)
 {
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-		signal_event(SENSOR_MGR_EVT_SHUTDOWN_READY);
+		SEND_EVENT(sensor, SENSOR_MGR_EVT_SHUTDOWN_READY);
 	}
 }
 
@@ -262,12 +242,12 @@ static void sensor_manager(void)
 
 	self.thread_id = k_current_get();
 
-	atomic_inc(&manager_count);
+	module_start(&self);
 
 	err = setup();
 	if (err) {
 		LOG_ERR("setup, error: %d", err);
-		signal_error(err);
+		SEND_ERROR(sensor, SENSOR_MGR_EVT_ERROR, err);
 	}
 
 	while (true) {

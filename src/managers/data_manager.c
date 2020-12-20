@@ -26,8 +26,6 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
-extern atomic_t manager_count;
-
 #define DEVICE_SETTINGS_KEY			"data_manager"
 #define DEVICE_SETTINGS_CONFIG_KEY		"config"
 
@@ -57,6 +55,7 @@ struct data_msg_data {
 K_MSGQ_DEFINE(msgq_data, sizeof(struct data_msg_data), 10, 4);
 
 static struct module_data self = {
+	.name = "data",
 	.msg_q = &msgq_data,
 };
 /* Ringbuffers. All data received by the data manager are stored in ringbuffers.
@@ -242,25 +241,6 @@ static int setup(void)
 	return 0;
 }
 
-static void signal_error(int err)
-{
-	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
-
-	data_mgr_event->type = DATA_MGR_EVT_ERROR;
-	data_mgr_event->data.err = err;
-
-	EVENT_SUBMIT(data_mgr_event);
-}
-
-static void signal_event(enum data_mgr_event_types type)
-{
-	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
-
-	data_mgr_event->type = type;
-
-	EVENT_SUBMIT(data_mgr_event);
-}
-
 static void config_distribute(enum data_mgr_event_types type)
 {
 	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
@@ -280,14 +260,15 @@ static void date_time_event_handler(const struct date_time_evt *evt)
 		/* Fall through. */
 	case DATE_TIME_OBTAINED_NTP:
 		/* Fall through. */
-	case DATE_TIME_OBTAINED_EXT:
-		signal_event(DATA_MGR_EVT_DATE_TIME_OBTAINED);
+	case DATE_TIME_OBTAINED_EXT: {
+		SEND_EVENT(data, DATA_MGR_EVT_DATE_TIME_OBTAINED);
 
 		/* De-register handler. At this point the application will have
 		 * date time to depend on indefinitely until a reboot occurs.
 		 */
 		date_time_register_handler(NULL);
 		break;
+	}
 	case DATE_TIME_NOT_OBTAINED:
 		break;
 	default:
@@ -329,7 +310,7 @@ static void data_send(void)
 		return;
 	} else if (err) {
 		LOG_ERR("Error encoding message %d", err);
-		signal_error(err);
+		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
 		return;
 	}
 
@@ -367,7 +348,7 @@ static void data_send(void)
 		return;
 	} else if (err) {
 		LOG_ERR("Error batch-enconding data: %d", err);
-		signal_error(err);
+		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
 		return;
 	}
 
@@ -382,7 +363,7 @@ static void data_send(void)
 
 static void config_get(void)
 {
-	signal_event(DATA_MGR_EVT_CONFIG_GET);
+	SEND_EVENT(data, DATA_MGR_EVT_CONFIG_GET);
 }
 
 static void config_send(void)
@@ -394,7 +375,7 @@ static void config_send(void)
 	err = cloud_codec_encode_config(&codec, &current_cfg);
 	if (err) {
 		LOG_ERR("Error encoding configuration, error: %d", err);
-		signal_error(err);
+		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
 		return;
 	}
 
@@ -425,7 +406,7 @@ static void data_ui_send(void)
 	err = cloud_codec_encode_ui_data(&codec, &ui_buf[head_ui_buf]);
 	if (err) {
 		LOG_ERR("Enconding button press, error: %d", err);
-		signal_error(err);
+		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
 		return;
 	}
 
@@ -530,7 +511,7 @@ static void clear_local_data_list(void)
 
 static void data_send_work_fn(struct k_work *work)
 {
-	signal_event(DATA_MGR_EVT_DATA_READY);
+	SEND_EVENT(data, DATA_MGR_EVT_DATA_READY);
 
 	clear_local_data_list();
 	k_delayed_work_cancel(&data_send_work);
@@ -695,7 +676,7 @@ static void on_all_states(struct data_msg_data *msg)
 		/* The module doesn't have anything to shut down and can
 		 * report back immediately.
 		 */
-		signal_event(DATA_MGR_EVT_SHUTDOWN_READY);
+		SEND_EVENT(data, DATA_MGR_EVT_SHUTDOWN_READY);
 	}
 
 	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
@@ -720,7 +701,7 @@ static void on_all_states(struct data_msg_data *msg)
 					&msg->manager.ui.data.ui,
 					&head_ui_buf);
 
-		signal_event(DATA_MGR_EVT_UI_DATA_READY);
+		SEND_EVENT(data, DATA_MGR_EVT_UI_DATA_READY);
 		return;
 	}
 
@@ -784,12 +765,12 @@ static void data_manager(void)
 
 	self.thread_id = k_current_get();
 
-	atomic_inc(&manager_count);
+	module_start(&self);
 
 	err = setup();
 	if (err) {
 		LOG_ERR("setup, error: %d", err);
-		signal_error(err);
+		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
 	}
 
 	state_set(CLOUD_STATE_DISCONNECTED);

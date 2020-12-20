@@ -81,7 +81,9 @@ struct app_mgr_event {
 	enum app_mgr_event_type type;
 	enum app_mgr_data_type data_list[APP_DATA_COUNT];
 
-	int err;
+	union {
+		int err;
+	} data;
 
 	size_t count;
 

@@ -27,8 +27,6 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
-extern atomic_t manager_count;
-
 BUILD_ASSERT(CONFIG_CLOUD_CONNECT_RETRIES < 14,
 	    "Cloud connect retries too large");
 
@@ -80,6 +78,7 @@ K_MSGQ_DEFINE(msgq_cloud, sizeof(struct cloud_msg_data), 10, 4);
 
 static struct module_data self = {
 	.msg_q = &msgq_cloud,
+	.name = "cloud",
 };
 
 static void connect_check_work_fn(struct k_work *work);
@@ -94,26 +93,7 @@ static void sub_state_set(enum cloud_manager_sub_state_type new_state)
 	cloud_sub_state = new_state;
 }
 
-static void signal_error(int err)
-{
-	struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
-
-	cloud_mgr_event->type = CLOUD_MGR_EVT_ERROR;
-	cloud_mgr_event->data.err = err;
-
-	EVENT_SUBMIT(cloud_mgr_event);
-}
-
-static void signal_event(enum cloud_mgr_event_types type)
-{
-	struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
-
-	cloud_mgr_event->type = type;
-
-	EVENT_SUBMIT(cloud_mgr_event);
-}
-
-static void signal_data_ack(void *ptr)
+static void send_data_ack(void *ptr)
 {
 	struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
 
@@ -123,7 +103,7 @@ static void signal_data_ack(void *ptr)
 	EVENT_SUBMIT(cloud_mgr_event);
 }
 
-static void signal_config_received(void)
+static void send_config_received(void)
 {
 	struct cloud_mgr_event *cloud_mgr_event = new_cloud_mgr_event();
 
@@ -145,7 +125,7 @@ static void data_send(struct data_mgr_event *evt)
 	}
 
 	if (evt->data.buffer.len > 0) {
-		signal_data_ack(evt->data.buffer.buf);
+		send_data_ack(evt->data.buffer.buf);
 	}
 }
 
@@ -161,7 +141,7 @@ static void config_send(struct data_mgr_event *evt)
 	}
 
 	if (evt->data.buffer.len > 0) {
-		signal_data_ack(evt->data.buffer.buf);
+		send_data_ack(evt->data.buffer.buf);
 	}
 }
 
@@ -189,7 +169,7 @@ static void batch_data_send(struct data_mgr_event *evt)
 	}
 
 	if (evt->data.buffer.len > 0) {
-		signal_data_ack(evt->data.buffer.buf);
+		send_data_ack(evt->data.buffer.buf);
 	}
 }
 
@@ -205,7 +185,7 @@ static void ui_data_send(struct data_mgr_event *evt)
 	}
 
 	if (evt->data.buffer.len > 0) {
-		signal_data_ack(evt->data.buffer.buf);
+		send_data_ack(evt->data.buffer.buf);
 	}
 }
 
@@ -218,7 +198,7 @@ static void connect_cloud(void)
 
 	if (connect_retries > CONFIG_CLOUD_CONNECT_RETRIES) {
 		LOG_WRN("Too many failed cloud connection attempts");
-		signal_error(-ENETUNREACH);
+		SEND_ERROR(cloud, CLOUD_MGR_EVT_ERROR, -ENETUNREACH);
 		return;
 	}
 
@@ -251,7 +231,7 @@ static void connect_check_work_fn(struct k_work *work)
 {
 	LOG_DBG("Cloud connection timeout occurred");
 
-	signal_event(CLOUD_MGR_EVT_CONNECTION_TIMEOUT);
+	SEND_EVENT(cloud, CLOUD_MGR_EVT_CONNECTION_TIMEOUT);
 }
 
 static bool event_handler(const struct event_header *eh)
@@ -261,10 +241,6 @@ static bool event_handler(const struct event_header *eh)
 		struct cloud_msg_data msg = {
 			.manager.app = *event
 		};
-
-		if (IS_EVENT((&msg), app, APP_MGR_EVT_START)) {
-			k_thread_start(cloud_manager_thread);
-		}
 
 		module_enqueue_msg(&self, &msg);
 	}
@@ -415,7 +391,7 @@ static void on_sub_state_cloud_disconnected(struct cloud_msg_data *msg)
 static void on_all_states(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-		signal_event(CLOUD_MGR_EVT_SHUTDOWN_READY);
+		SEND_EVENT(cloud, CLOUD_MGR_EVT_SHUTDOWN_READY);
 	}
 
 	if (is_data_mgr_event(&msg->manager.data.header)) {
@@ -433,18 +409,21 @@ static void on_all_states(struct cloud_msg_data *msg)
 static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
 {
 	switch (evt->type) {
-	case CLOUD_WRAP_EVT_CONNECTING:
+	case CLOUD_WRAP_EVT_CONNECTING: {
 		LOG_DBG("CLOUD_WRAP_EVT_CONNECTING");
-		signal_event(CLOUD_MGR_EVT_CONNECTING);
+		SEND_EVENT(cloud, CLOUD_MGR_EVT_CONNECTING);
 		break;
-	case CLOUD_WRAP_EVT_CONNECTED:
+	}
+	case CLOUD_WRAP_EVT_CONNECTED: {
 		LOG_DBG("CLOUD_WRAP_EVT_CONNECTED");
-		signal_event(CLOUD_MGR_EVT_CONNECTED);
+		SEND_EVENT(cloud, CLOUD_MGR_EVT_CONNECTED);
 		break;
-	case CLOUD_WRAP_EVT_DISCONNECTED:
+	}
+	case CLOUD_WRAP_EVT_DISCONNECTED: {
 		LOG_DBG("CLOUD_WRAP_EVT_DISCONNECTED");
-		signal_event(CLOUD_MGR_EVT_DISCONNECTED);
+		SEND_EVENT(cloud, CLOUD_MGR_EVT_DISCONNECTED);
 		break;
+	}
 	case CLOUD_WRAP_EVT_DATA_RECEIVED:
 		LOG_DBG("CLOUD_WRAP_EVT_DATA_RECEIVED");
 
@@ -455,50 +434,47 @@ static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
 		 * sending uninitialized variables to the data manager.
 		 */
 
-		// A bit unclear to me here. Where is generic data, meaning
-		// non-config data received?
-
 		err = cloud_codec_decode_config(evt->data.buf, &copy_cfg);
 		if (err == 0) {
 			LOG_DBG("Device configuration encoded");
-			signal_config_received();
+			send_config_received();
 			break;
 		} else if (err == -ENODATA) {
 			LOG_WRN("Device configuration empty!");
 		} else {
 			LOG_ERR("Decoding of device configuration, error: %d",
 				err);
-			signal_error(err);
+			SEND_ERROR(cloud, CLOUD_MGR_EVT_ERROR, err);
 			break;
 		}
-
-		// Perhaps DBG level logging here
 
 #if defined(CONFIG_AGPS)
 		err = gps_process_agps_data(evt->data.buf, evt->data.len);
 		if (err) {
-			// It might be that it wasn't A-GPS data
 			LOG_WRN("Unable to process agps data, error: %d", err);
 		}
 #endif
 		break;
-	case CLOUD_WRAP_EVT_FOTA_DONE:
+	case CLOUD_WRAP_EVT_FOTA_DONE: {
 		LOG_DBG("CLOUD_WRAP_EVT_FOTA_DONE");
-		signal_event(CLOUD_MGR_EVT_FOTA_DONE);
+		SEND_EVENT(cloud, CLOUD_MGR_EVT_FOTA_DONE);
 		break;
-	case CLOUD_WRAP_EVT_FOTA_START:
+	}
+	case CLOUD_WRAP_EVT_FOTA_START: {
 		LOG_DBG("CLOUD_WRAP_EVT_FOTA_START");
 		break;
+	}
 	case CLOUD_WRAP_EVT_FOTA_ERASE_PENDING:
 		LOG_DBG("CLOUD_WRAP_EVT_FOTA_ERASE_PENDING");
 		break;
 	case CLOUD_WRAP_EVT_FOTA_ERASE_DONE:
 		LOG_DBG("CLOUD_WRAP_EVT_FOTA_ERASE_DONE");
 		break;
-	case CLOUD_WRAP_EVT_ERROR:
+	case CLOUD_WRAP_EVT_ERROR: {
 		LOG_DBG("CLOUD_WRAP_EVT_ERROR");
-		signal_error(evt->err);
+		SEND_ERROR(cloud, CLOUD_MGR_EVT_ERROR, evt->err);
 		break;
+	}
 	default:
 		break;
 
@@ -530,7 +506,8 @@ static void cloud_manager(void)
 
 	self.thread_id = k_current_get();
 
-	atomic_inc(&manager_count);
+	module_start(&self);
+
 	state_set(CLOUD_MGR_STATE_LTE_DISCONNECTED);
 	sub_state_set(CLOUD_MGR_SUB_STATE_CLOUD_DISCONNECTED);
 
@@ -539,7 +516,7 @@ static void cloud_manager(void)
 	err = setup();
 	if (err) {
 		LOG_ERR("setup, error %d", err);
-		signal_error(err);
+		SEND_ERROR(cloud, CLOUD_MGR_EVT_ERROR, err);
 	}
 
 	while (true) {

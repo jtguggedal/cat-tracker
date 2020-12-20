@@ -32,8 +32,6 @@
 
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
-extern atomic_t manager_count;
-
 /* Message structure. Events from other managers are converted to messages
  * in the event manager handler, and then queued up in the message queue
  * for processing in the main thread.
@@ -102,6 +100,7 @@ K_TIMER_DEFINE(movement_resolution_timer, NULL, NULL);
  * opens up for using convenienve functions available for modules.
  */
 static struct module_data self = {
+	.name = "app",
 	.msg_q = &msgq_app,
 };
 
@@ -155,25 +154,6 @@ static void sub_state_set(enum app_sub_state new_state)
 		log_strdup(sub_state2str(new_state)));
 
 	app_sub_state = new_state;
-}
-
-static void signal_error(int err)
-{
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-	app_mgr_event->type = APP_MGR_EVT_ERROR;
-	app_mgr_event->err = err;
-
-	EVENT_SUBMIT(app_mgr_event);
-}
-
-static void signal_event(enum app_mgr_event_type type)
-{
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
-
-	app_mgr_event->type = type;
-
-	EVENT_SUBMIT(app_mgr_event);
 }
 
 /* Event manager handler. Puts event data into messages and adds them to the
@@ -284,7 +264,7 @@ static void data_get_all(void)
 static void data_sample_timer_handler(struct k_timer *timer)
 {
 	ARG_UNUSED(timer);
-	signal_event(APP_MGR_EVT_DATA_GET_ALL);
+	SEND_EVENT(app, APP_MGR_EVT_DATA_GET_ALL);
 }
 
 /* Message handler for APP_STATE_INIT. */
@@ -337,7 +317,7 @@ void on_sub_state_passive(struct app_msg_data *msg)
 		app_cfg = msg->manager.data.data.cfg;
 
 		/*Acknowledge configuration to cloud. */
-		signal_event(APP_MGR_EVT_CONFIG_SEND);
+		SEND_EVENT(app, APP_MGR_EVT_CONFIG_SEND);
 
 		if (app_cfg.act) {
 			LOG_INF("Device mode: Active");
@@ -389,7 +369,7 @@ static void on_sub_state_active(struct app_msg_data *msg)
 		app_cfg = msg->manager.data.data.cfg;
 
 		/* Acknowledge configuration to cloud. */
-		signal_event(APP_MGR_EVT_CONFIG_SEND);
+		SEND_EVENT(app, APP_MGR_EVT_CONFIG_SEND);
 
 		if (!app_cfg.act) {
 			LOG_INF("Device mode: Passive");
@@ -422,7 +402,7 @@ static void on_all_events(struct app_msg_data *msg)
 		k_timer_stop(&movement_timeout_timer);
 		k_timer_stop(&movement_resolution_timer);
 
-		signal_event(APP_MGR_EVT_SHUTDOWN_READY);
+		SEND_EVENT(app, APP_MGR_EVT_SHUTDOWN_READY);
 	}
 }
 
@@ -433,7 +413,7 @@ void main(void)
 
 	self.thread_id = k_current_get();
 
-	atomic_inc(&manager_count);
+	module_start(&self);
 
 	if (event_manager_init()) {
 		/* Without the event manager, the application will not work
@@ -443,14 +423,14 @@ void main(void)
 		k_sleep(K_SECONDS(5));
 		sys_reboot(SYS_REBOOT_COLD);
 	} else {
-		signal_event(APP_MGR_EVT_START);
+		SEND_EVENT(app, APP_MGR_EVT_START);
 	}
 
 #if defined(CONFIG_WATCHDOG)
 	err = watchdog_init_and_start();
 	if (err) {
 		LOG_DBG("watchdog_init_and_start, error: %d", err);
-		signal_error(err);
+		SEND_ERROR(app, APP_MGR_EVT_ERROR, err);
 	}
 #endif
 

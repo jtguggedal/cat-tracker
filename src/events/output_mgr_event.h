@@ -29,7 +29,9 @@ enum output_mgr_event_types {
 struct output_mgr_event {
 	struct event_header header;
 	enum output_mgr_event_types type;
-	int err;
+	union {
+		int err;
+	} data;
 };
 
 EVENT_TYPE_DECLARE(output_mgr_event);

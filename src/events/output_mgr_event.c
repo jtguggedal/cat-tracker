@@ -21,7 +21,7 @@ static int log_output_mgr_event(const struct event_header *eh, char *buf,
 	case OUTPUT_MGR_EVT_ERROR:
 		strcpy(event_name, "OUTPUT_MGR_EVT_ERROR");
 		return snprintf(buf, buf_len, "%s - Error code %d",
-				event_name, event->err);
+				event_name, event->data.err);
 	default:
 		strcpy(event_name, "Unknown event");
 		break;

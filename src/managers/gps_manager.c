@@ -27,7 +27,9 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
  */
 #define GPS_INTERVAL_MAX 1800
 
-extern atomic_t manager_count;
+static struct module_data self = {
+	.name = "gps",
+};
 
 struct gps_msg_data {
 	union {
@@ -71,25 +73,6 @@ static struct gps_config gps_cfg = {
 	.interval = GPS_INTERVAL_MAX
 };
 
-static void signal_error(int err)
-{
-	struct gps_mgr_event *gps_mgr_event = new_gps_mgr_event();
-
-	gps_mgr_event->type = GPS_MGR_EVT_ERROR;
-	gps_mgr_event->data.err = err;
-
-	EVENT_SUBMIT(gps_mgr_event);
-}
-
-static void signal_event(enum gps_mgr_event_type type)
-{
-	struct gps_mgr_event *gps_mgr_event = new_gps_mgr_event();
-
-	gps_mgr_event->type = type;
-
-	EVENT_SUBMIT(gps_mgr_event);
-}
-
 static void gps_data_send(struct gps_pvt *gps_data)
 {
 	struct gps_mgr_event *gps_mgr_event = new_gps_mgr_event();
@@ -123,7 +106,7 @@ static void gps_search_start(void)
 		return;
 	}
 
-	signal_event(GPS_MGR_EVT_ACTIVE);
+	SEND_EVENT(gps, GPS_MGR_EVT_ACTIVE);
 }
 
 static void gps_search_stop(void)
@@ -136,7 +119,7 @@ static void gps_search_stop(void)
 		return;
 	}
 
-	signal_event(GPS_MGR_EVT_INACTIVE);
+	SEND_EVENT(gps, GPS_MGR_EVT_INACTIVE);
 }
 
 static void gps_time_set(struct gps_pvt *gps_data)
@@ -167,7 +150,7 @@ static void gps_event_handler(const struct device *dev, struct gps_event *evt)
 		break;
 	case GPS_EVT_SEARCH_TIMEOUT:
 		LOG_DBG("GPS_EVT_SEARCH_TIMEOUT");
-		signal_event(GPS_MGR_EVT_TIMEOUT);
+		SEND_EVENT(gps, GPS_MGR_EVT_TIMEOUT);
 		gps_search_stop();
 		break;
 	case GPS_EVT_PVT:
@@ -234,19 +217,6 @@ static bool event_handler(const struct event_header *eh)
 		struct gps_msg_data msg = {
 			.manager.app = *event
 		};
-
-		if (IS_EVENT((&msg), app, APP_MGR_EVT_START)) {
-			int err;
-
-			atomic_inc(&manager_count);
-			state_set(GPS_MGR_STATE_INIT);
-
-			err = setup();
-			if (err) {
-				LOG_ERR("setup, error: %d", err);
-				signal_error(err);
-			}
-		}
 
 		message_handler(&msg);
 	}
@@ -344,8 +314,21 @@ static void on_state_running_gps_idle(struct gps_msg_data *msg)
 
 static void on_all_states(struct gps_msg_data *msg)
 {
+	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
+		int err;
+
+		state_set(GPS_MGR_STATE_INIT);
+		module_start(&self);
+
+		err = setup();
+		if (err) {
+			LOG_ERR("setup, error: %d", err);
+			SEND_ERROR(gps, GPS_MGR_EVT_ERROR, err);
+		}
+	}
+
 	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-		signal_event(GPS_MGR_EVT_SHUTDOWN_READY);
+		SEND_EVENT(gps, GPS_MGR_EVT_SHUTDOWN_READY);
 	}
 }
 

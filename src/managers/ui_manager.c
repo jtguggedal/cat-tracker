@@ -20,7 +20,9 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
-extern atomic_t manager_count;
+static struct module_data self = {
+	.name = "ui",
+};
 
 struct ui_msg_data {
 	union {
@@ -29,24 +31,7 @@ struct ui_msg_data {
 	} manager;
 };
 
-static void signal_error(int err)
-{
-	struct ui_mgr_event *ui_mgr_event = new_ui_mgr_event();
-
-	ui_mgr_event->type = UI_MGR_EVT_ERROR;
-	ui_mgr_event->data.err = err;
-
-	EVENT_SUBMIT(ui_mgr_event);
-}
-
-static void signal_event(enum ui_mgr_event_types type)
-{
-	struct ui_mgr_event *ui_mgr_event = new_ui_mgr_event();
-
-	ui_mgr_event->type = type;
-
-	EVENT_SUBMIT(ui_mgr_event);
-}
+static void message_handler(struct ui_msg_data *msg);
 
 static void button_handler(uint32_t button_states, uint32_t has_changed)
 {
@@ -109,25 +94,6 @@ static int setup(void)
 	return 0;
 }
 
-static void message_handler(struct ui_msg_data *msg)
-{
-	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
-		int err;
-
-		atomic_inc(&manager_count);
-
-		err = setup();
-		if (err) {
-			LOG_ERR("setup, error: %d", err);
-			signal_error(err);
-		}
-	}
-
-	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-		signal_event(UI_MGR_EVT_SHUTDOWN_READY);
-	}
-}
-
 static bool event_handler(const struct event_header *eh)
 {
 	if (is_app_mgr_event(eh)) {
@@ -149,6 +115,25 @@ static bool event_handler(const struct event_header *eh)
 	}
 
 	return false;
+}
+
+static void message_handler(struct ui_msg_data *msg)
+{
+	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
+		int err;
+
+		module_start(&self);
+
+		err = setup();
+		if (err) {
+			LOG_ERR("setup, error: %d", err);
+			SEND_ERROR(ui, UI_MGR_EVT_ERROR, err);
+		}
+	}
+
+	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
+		SEND_EVENT(ui, UI_MGR_EVT_SHUTDOWN_READY);
+	}
 }
 
 EVENT_LISTENER(MODULE, event_handler);

@@ -329,7 +329,6 @@ static void data_send(void)
 	codec.buf = NULL;
 	codec.len = 0;
 
-	// Encode batch data
 	err = cloud_codec_encode_batch_data(&codec,
 					gps_buf,
 					sensors_buf,
@@ -737,7 +736,7 @@ static void on_all_states(struct data_msg_data *msg)
 			accel_buf,
 			&msg->manager.sensor.data.accel,
 			&head_accel_buf);
-}
+	}
 
 	if (IS_EVENT(msg, gps, GPS_MGR_EVT_DATA_READY)) {
 		cloud_codec_populate_gps_buffer(

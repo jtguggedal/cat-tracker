@@ -162,7 +162,6 @@ int cloud_wrap_init(cloud_wrap_evt_handler_t event_handler)
 {
 	int err;
 
-	// Perhaps switch it around and hav "CONFIG_CLIENT_ID_USE_IMEI"
 #if !defined(CONFIG_USE_CUSTOM_MQTT_CLIENT_ID)
 	char imei_buf[50];
 
@@ -174,7 +173,6 @@ int cloud_wrap_init(cloud_wrap_evt_handler_t event_handler)
 	}
 
 	/* Set null character at the end of the device IMEI. */
-	// Should not be needed
 	imei_buf[AWS_CLOUD_CLIENT_ID_LEN] = 0;
 
 	strncpy(client_id_buf, imei_buf, sizeof(client_id_buf));

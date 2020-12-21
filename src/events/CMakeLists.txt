@@ -5,13 +5,13 @@
 #
 
 target_sources(app PRIVATE
-	       ${CMAKE_CURRENT_SOURCE_DIR}/app_mgr_event.c
-	       ${CMAKE_CURRENT_SOURCE_DIR}/cloud_mgr_event.c
-	       ${CMAKE_CURRENT_SOURCE_DIR}/gps_mgr_event.c
-	       ${CMAKE_CURRENT_SOURCE_DIR}/modem_mgr_event.c
-	       ${CMAKE_CURRENT_SOURCE_DIR}/data_mgr_event.c
-	       ${CMAKE_CURRENT_SOURCE_DIR}/sensor_mgr_event.c
-	       ${CMAKE_CURRENT_SOURCE_DIR}/ui_mgr_event.c
-	       ${CMAKE_CURRENT_SOURCE_DIR}/util_mgr_event.c
-	       ${CMAKE_CURRENT_SOURCE_DIR}/output_mgr_event.c
+	       ${CMAKE_CURRENT_SOURCE_DIR}/app_module_event.c
+	       ${CMAKE_CURRENT_SOURCE_DIR}/cloud_module_event.c
+	       ${CMAKE_CURRENT_SOURCE_DIR}/gps_module_event.c
+	       ${CMAKE_CURRENT_SOURCE_DIR}/modem_module_event.c
+	       ${CMAKE_CURRENT_SOURCE_DIR}/data_module_event.c
+	       ${CMAKE_CURRENT_SOURCE_DIR}/sensor_module_event.c
+	       ${CMAKE_CURRENT_SOURCE_DIR}/ui_module_event.c
+	       ${CMAKE_CURRENT_SOURCE_DIR}/util_module_event.c
+	       ${CMAKE_CURRENT_SOURCE_DIR}/output_module_event.c
 )

@@ -6,20 +6,20 @@
 
 #include <stdio.h>
 
-#include "output_mgr_event.h"
+#include "output_module_event.h"
 
-static int log_output_mgr_event(const struct event_header *eh, char *buf,
+static int log_output_module_event(const struct event_header *eh, char *buf,
 				size_t buf_len)
 {
-	const struct output_mgr_event *event = cast_output_mgr_event(eh);
+	const struct output_module_event *event = cast_output_module_event(eh);
 	char event_name[50] = "\0";
 
 	switch (event->type) {
-	case OUTPUT_MGR_EVT_SHUTDOWN_READY:
-		strcpy(event_name, "OUTPUT_MGR_EVT_SHUTDOWN_READY");
+	case OUTPUT_EVT_SHUTDOWN_READY:
+		strcpy(event_name, "OUTPUT_EVT_SHUTDOWN_READY");
 		break;
-	case OUTPUT_MGR_EVT_ERROR:
-		strcpy(event_name, "OUTPUT_MGR_EVT_ERROR");
+	case OUTPUT_EVT_ERROR:
+		strcpy(event_name, "OUTPUT_EVT_ERROR");
 		return snprintf(buf, buf_len, "%s - Error code %d",
 				event_name, event->data.err);
 	default:
@@ -30,7 +30,7 @@ static int log_output_mgr_event(const struct event_header *eh, char *buf,
 	return snprintf(buf, buf_len, "%s", event_name);
 }
 
-EVENT_TYPE_DEFINE(output_mgr_event,
-		  CONFIG_OUTPUT_MGR_EVENTS_LOG,
-		  log_output_mgr_event,
+EVENT_TYPE_DEFINE(output_module_event,
+		  CONFIG_OUTPUT_EVENTS_LOG,
+		  log_output_module_event,
 		  NULL);

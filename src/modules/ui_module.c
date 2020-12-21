@@ -9,13 +9,13 @@
 #include <dk_buttons_and_leds.h>
 #include <event_manager.h>
 
-#define MODULE ui_manager
+#define MODULE ui_module
 
 #include "modules_common.h"
-#include "events/ui_mgr_event.h"
-#include "events/sensor_mgr_event.h"
-#include "events/app_mgr_event.h"
-#include "events/util_mgr_event.h"
+#include "events/ui_module_event.h"
+#include "events/sensor_module_event.h"
+#include "events/app_module_event.h"
+#include "events/util_module_event.h"
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
@@ -26,9 +26,9 @@ static struct module_data self = {
 
 struct ui_msg_data {
 	union {
-		struct util_mgr_event util;
-		struct app_mgr_event app;
-	} manager;
+		struct util_module_event util;
+		struct app_module_event app;
+	} module;
 };
 
 static void message_handler(struct ui_msg_data *msg);
@@ -46,14 +46,14 @@ static void button_handler(uint32_t button_states, uint32_t has_changed)
 		LOG_DBG("2 seconds to next allowed cloud publication ");
 		LOG_DBG("triggered by button 1");
 
-		struct ui_mgr_event *ui_mgr_event = new_ui_mgr_event();
+		struct ui_module_event *ui_module_event = new_ui_module_event();
 
-		ui_mgr_event->type = UI_MGR_EVT_BUTTON_DATA_READY;
-		ui_mgr_event->data.ui.btn = 1;
-		ui_mgr_event->data.ui.btn_ts = k_uptime_get();
-		ui_mgr_event->data.ui.queued = true;
+		ui_module_event->type = UI_EVT_BUTTON_DATA_READY;
+		ui_module_event->data.ui.btn = 1;
+		ui_module_event->data.ui.btn_ts = k_uptime_get();
+		ui_module_event->data.ui.queued = true;
 
-		EVENT_SUBMIT(ui_mgr_event);
+		EVENT_SUBMIT(ui_module_event);
 
 		try_again_timeout = k_uptime_get();
 	}
@@ -70,13 +70,13 @@ static void button_handler(uint32_t button_states, uint32_t has_changed)
 		 * triggered. Set queued flag to false to signify that
 		 * no data is carried in the message.
 		 */
-		struct sensor_mgr_event *sensor_mgr_event =
-				new_sensor_mgr_event();
+		struct sensor_module_event *sensor_module_event =
+				new_sensor_module_event();
 
-		sensor_mgr_event->type = SENSOR_MGR_EVT_MOVEMENT_DATA_READY;
-		sensor_mgr_event->data.accel.queued = false;
+		sensor_module_event->type = SENSOR_EVT_MOVEMENT_DATA_READY;
+		sensor_module_event->data.accel.queued = false;
 
-		EVENT_SUBMIT(sensor_mgr_event);
+		EVENT_SUBMIT(sensor_module_event);
 	}
 #endif
 }
@@ -96,19 +96,19 @@ static int setup(void)
 
 static bool event_handler(const struct event_header *eh)
 {
-	if (is_app_mgr_event(eh)) {
-		struct app_mgr_event *event = cast_app_mgr_event(eh);
+	if (is_app_module_event(eh)) {
+		struct app_module_event *event = cast_app_module_event(eh);
 		struct ui_msg_data msg = {
-			.manager.app = *event
+			.module.app = *event
 		};
 
 		message_handler(&msg);
 	}
 
-	if (is_util_mgr_event(eh)) {
-		struct util_mgr_event *event = cast_util_mgr_event(eh);
+	if (is_util_module_event(eh)) {
+		struct util_module_event *event = cast_util_module_event(eh);
 		struct ui_msg_data msg = {
-			.manager.util = *event
+			.module.util = *event
 		};
 
 		message_handler(&msg);
@@ -119,7 +119,7 @@ static bool event_handler(const struct event_header *eh)
 
 static void message_handler(struct ui_msg_data *msg)
 {
-	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
+	if (IS_EVENT(msg, app, APP_EVT_START)) {
 		int err;
 
 		module_start(&self);
@@ -127,15 +127,15 @@ static void message_handler(struct ui_msg_data *msg)
 		err = setup();
 		if (err) {
 			LOG_ERR("setup, error: %d", err);
-			SEND_ERROR(ui, UI_MGR_EVT_ERROR, err);
+			SEND_ERROR(ui, UI_EVT_ERROR, err);
 		}
 	}
 
-	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-		SEND_EVENT(ui, UI_MGR_EVT_SHUTDOWN_READY);
+	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {
+		SEND_EVENT(ui, UI_EVT_SHUTDOWN_READY);
 	}
 }
 
 EVENT_LISTENER(MODULE, event_handler);
-EVENT_SUBSCRIBE(MODULE, util_mgr_event);
-EVENT_SUBSCRIBE(MODULE, app_mgr_event);
+EVENT_SUBSCRIBE(MODULE, util_module_event);
+EVENT_SUBSCRIBE(MODULE, app_module_event);

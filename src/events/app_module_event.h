@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _APP_MGR_EVENT_H_
-#define _APP_MGR_EVENT_H_
+#ifndef _APP_EVENT_H_
+#define _APP_EVENT_H_
 
 /**
  * @brief Application Event
- * @defgroup app_mgr_event Application Event
+ * @defgroup app_module_event Application Event
  * @{
  */
 
@@ -20,52 +20,52 @@
 extern "C" {
 #endif
 
-/** @brief Application event types submitted by Application manager. */
-enum app_mgr_event_type {
+/** @brief Application event types submitted by Application module. */
+enum app_module_event_type {
 	/* Signal that the application has done necessary setup, and
 	 * now started.
 	 */
-	APP_MGR_EVT_START,
+	APP_EVT_START,
 
 	/* Connect to LTE network. */
-	APP_MGR_EVT_LTE_CONNECT,
+	APP_EVT_LTE_CONNECT,
 
 	/* Disconnect from LTE network. */
-	APP_MGR_EVT_LTE_DISCONNECT,
+	APP_EVT_LTE_DISCONNECT,
 
 	/* Signal other modules to start sampling and report the data when
 	 * it's ready.
 	 * The event must also contain a list with requested data types,
-	 * @ref enum app_mgr_data_type.
+	 * @ref enum app_module_data_type.
 	 */
-	APP_MGR_EVT_DATA_GET,
+	APP_EVT_DATA_GET,
 
 	/* Create a list with all available sensor types in the system and
-	 * distribute it as a APP_MGR_EVT_DATA_GET event.
+	 * distribute it as a APP_EVT_DATA_GET event.
 	 */
-	APP_MGR_EVT_DATA_GET_ALL,
+	APP_EVT_DATA_GET_ALL,
 
 	/* Request latest configuration from the cloud. */
-	APP_MGR_EVT_CONFIG_GET,
+	APP_EVT_CONFIG_GET,
 
 	/* Send the currently applied local configuration to cloud. */
-	APP_MGR_EVT_CONFIG_SEND,
+	APP_EVT_CONFIG_SEND,
 
 	/* The application module has performed all procedures to prepare for
 	 * a shutdown of the system.
 	 */
-	APP_MGR_EVT_SHUTDOWN_READY,
+	APP_EVT_SHUTDOWN_READY,
 
 	/* An error has occurred in the application module. Error details are
 	 * attached in the event structure.
 	 */
-	APP_MGR_EVT_ERROR
+	APP_EVT_ERROR
 };
 
 /** @brief Data types that the application module requests samples for in
- *	   @ref enum app_mgr_event_type APP_MGR_EVT_DATA_GET.
+ *	   @ref enum app_module_event_type APP_EVT_DATA_GET.
  */
-enum app_mgr_data_type {
+enum app_module_data_type {
 	APP_DATA_ENVIRONMENTAL,
 	APP_DATA_MOVEMENT,
 	APP_DATA_MODEM,
@@ -76,10 +76,10 @@ enum app_mgr_data_type {
 };
 
 /** @brief Application module event. */
-struct app_mgr_event {
+struct app_module_event {
 	struct event_header header;
-	enum app_mgr_event_type type;
-	enum app_mgr_data_type data_list[APP_DATA_COUNT];
+	enum app_module_event_type type;
+	enum app_module_data_type data_list[APP_DATA_COUNT];
 
 	union {
 		int err;
@@ -87,14 +87,14 @@ struct app_mgr_event {
 
 	size_t count;
 
-	/* The time each manager has to fetch data before what is available
+	/* The time each module has to fetch data before what is available
 	 * is transmitted.
 	 */
 	int timeout;
 };
 
 /* Register app module events as an event type with the event manager. */
-EVENT_TYPE_DECLARE(app_mgr_event);
+EVENT_TYPE_DECLARE(app_module_event);
 
 #ifdef __cplusplus
 }
@@ -104,4 +104,4 @@ EVENT_TYPE_DECLARE(app_mgr_event);
  * @}
  */
 
-#endif /* _APP_MGR_EVENT_H_ */
+#endif /* _APP_EVENT_H_ */

@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _UTIL_MGR_EVENT_H_
-#define _UTIL_MGR_EVENT_H_
+#ifndef _UTIL_EVENT_H_
+#define _UTIL_EVENT_H_
 
 /**
  * @brief Util Event
- * @defgroup util_mgr_event Util Event
+ * @defgroup util_module_event Util Event
  * @{
  */
 
@@ -19,17 +19,17 @@
 extern "C" {
 #endif
 
-enum util_mgr_event_types {
-	UTIL_MGR_EVT_SHUTDOWN_REQUEST
+enum util_module_event_types {
+	UTIL_EVT_SHUTDOWN_REQUEST
 };
 
 /** @brief Util event. */
-struct util_mgr_event {
+struct util_module_event {
 	struct event_header header;
-	enum util_mgr_event_types type;
+	enum util_module_event_types type;
 };
 
-EVENT_TYPE_DECLARE(util_mgr_event);
+EVENT_TYPE_DECLARE(util_module_event);
 
 #ifdef __cplusplus
 }
@@ -39,4 +39,4 @@ EVENT_TYPE_DECLARE(util_mgr_event);
  * @}
  */
 
-#endif /* _UTIL_MGR_EVENT_H_ */
+#endif /* _UTIL_EVENT_H_ */

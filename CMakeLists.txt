@@ -17,7 +17,7 @@ target_sources(app PRIVATE src/main.c)
 zephyr_include_directories(src)
 
 # Application directories
-add_subdirectory(src/managers)
+add_subdirectory(src/modules)
 add_subdirectory(src/events)
 add_subdirectory(src/ui)
 add_subdirectory(src/cloud)

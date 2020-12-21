@@ -11,22 +11,22 @@
 
 #include "cloud/cloud_codec/cloud_codec.h"
 
-#define MODULE data_manager
+#define MODULE data_module
 
 #include "modules_common.h"
-#include "events/app_mgr_event.h"
-#include "events/cloud_mgr_event.h"
-#include "events/data_mgr_event.h"
-#include "events/gps_mgr_event.h"
-#include "events/modem_mgr_event.h"
-#include "events/sensor_mgr_event.h"
-#include "events/ui_mgr_event.h"
-#include "events/util_mgr_event.h"
+#include "events/app_module_event.h"
+#include "events/cloud_module_event.h"
+#include "events/data_module_event.h"
+#include "events/gps_module_event.h"
+#include "events/modem_module_event.h"
+#include "events/sensor_module_event.h"
+#include "events/ui_module_event.h"
+#include "events/util_module_event.h"
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
-#define DEVICE_SETTINGS_KEY			"data_manager"
+#define DEVICE_SETTINGS_KEY			"data_module"
 #define DEVICE_SETTINGS_CONFIG_KEY		"config"
 
 /* Default device configuration values. */
@@ -41,15 +41,15 @@ static void data_send_work_fn(struct k_work *work);
 
 struct data_msg_data {
 	union {
-		struct modem_mgr_event modem;
-		struct cloud_mgr_event cloud;
-		struct gps_mgr_event gps;
-		struct ui_mgr_event ui;
-		struct sensor_mgr_event sensor;
-		struct data_mgr_event data;
-		struct app_mgr_event app;
-		struct util_mgr_event util;
-	} manager;
+		struct modem_module_event modem;
+		struct cloud_module_event cloud;
+		struct gps_module_event gps;
+		struct ui_module_event ui;
+		struct sensor_module_event sensor;
+		struct data_module_event data;
+		struct app_module_event app;
+		struct util_module_event util;
+	} module;
 };
 
 K_MSGQ_DEFINE(msgq_data, sizeof(struct data_msg_data), 10, 4);
@@ -58,7 +58,7 @@ static struct module_data self = {
 	.name = "data",
 	.msg_q = &msgq_data,
 };
-/* Ringbuffers. All data received by the data manager are stored in ringbuffers.
+/* Ringbuffers. All data received by the Data module are stored in ringbuffers.
  * Upon a LTE connection loss the device will keep sampling/storing data in
  * the buffers, and empty the buffers in batches upon a reconnect.
  */
@@ -95,19 +95,19 @@ enum cloud_connection_state {
 
 static struct k_delayed_work data_send_work;
 
-/* List used to keep track of responses from other managers with data that is
+/* List used to keep track of responses from other modules with data that is
  * requested to be sampled/published.
  */
-static enum app_mgr_data_type data_types_list[APP_DATA_COUNT];
+static enum app_module_data_type data_types_list[APP_DATA_COUNT];
 
 /* Total number of data types requested for a particular sample/publish
  * cycle.
  */
 static int received_data_type_count;
 
-/* Counter of data types received from other managers. When this number
+/* Counter of data types received from other modules. When this number
  * matches the affirmed_data_type variable all requested data has been
- * received by the data manager.
+ * received by the Data module.
  */
 static int data_cnt;
 
@@ -241,14 +241,14 @@ static int setup(void)
 	return 0;
 }
 
-static void config_distribute(enum data_mgr_event_types type)
+static void config_distribute(enum data_module_event_types type)
 {
-	struct data_mgr_event *data_mgr_event = new_data_mgr_event();
+	struct data_module_event *data_module_event = new_data_module_event();
 
-	data_mgr_event->type = type;
-	data_mgr_event->data.cfg = current_cfg;
+	data_module_event->type = type;
+	data_module_event->data.cfg = current_cfg;
 
-	EVENT_SUBMIT(data_mgr_event);
+	EVENT_SUBMIT(data_module_event);
 }
 
 /* Date and time control */
@@ -261,7 +261,7 @@ static void date_time_event_handler(const struct date_time_evt *evt)
 	case DATE_TIME_OBTAINED_NTP:
 		/* Fall through. */
 	case DATE_TIME_OBTAINED_EXT: {
-		SEND_EVENT(data, DATA_MGR_EVT_DATE_TIME_OBTAINED);
+		SEND_EVENT(data, DATA_EVT_DATE_TIME_OBTAINED);
 
 		/* De-register handler. At this point the application will have
 		 * date time to depend on indefinitely until a reboot occurs.
@@ -281,8 +281,8 @@ static void date_time_event_handler(const struct date_time_evt *evt)
 static void data_send(void)
 {
 	int err;
-	struct data_mgr_event *data_mgr_event_new;
-	struct data_mgr_event *data_mgr_event_batch;
+	struct data_module_event *data_module_event_new;
+	struct data_module_event *data_module_event_batch;
 	struct cloud_codec_data codec;
 
 	if (!date_time_is_valid()) {
@@ -310,21 +310,21 @@ static void data_send(void)
 		return;
 	} else if (err) {
 		LOG_ERR("Error encoding message %d", err);
-		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
+		SEND_ERROR(data, DATA_EVT_ERROR, err);
 		return;
 	}
 
 	LOG_DBG("Data encoded successfully");
 
 
-	data_mgr_event_new = new_data_mgr_event();
-	data_mgr_event_new->type = DATA_MGR_EVT_DATA_SEND;
+	data_module_event_new = new_data_module_event();
+	data_module_event_new->type = DATA_EVT_DATA_SEND;
 
-	data_mgr_event_new->data.buffer.buf = codec.buf;
-	data_mgr_event_new->data.buffer.len = codec.len;
+	data_module_event_new->data.buffer.buf = codec.buf;
+	data_module_event_new->data.buffer.len = codec.len;
 
 	pending_data_add(codec.buf);
-	EVENT_SUBMIT(data_mgr_event_new);
+	EVENT_SUBMIT(data_module_event_new);
 
 	codec.buf = NULL;
 	codec.len = 0;
@@ -347,39 +347,39 @@ static void data_send(void)
 		return;
 	} else if (err) {
 		LOG_ERR("Error batch-enconding data: %d", err);
-		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
+		SEND_ERROR(data, DATA_EVT_ERROR, err);
 		return;
 	}
 
-	data_mgr_event_batch = new_data_mgr_event();
-	data_mgr_event_batch->type = DATA_MGR_EVT_DATA_SEND_BATCH;
-	data_mgr_event_batch->data.buffer.buf = codec.buf;
-	data_mgr_event_batch->data.buffer.len = codec.len;
+	data_module_event_batch = new_data_module_event();
+	data_module_event_batch->type = DATA_EVT_DATA_SEND_BATCH;
+	data_module_event_batch->data.buffer.buf = codec.buf;
+	data_module_event_batch->data.buffer.len = codec.len;
 
 	pending_data_add(codec.buf);
-	EVENT_SUBMIT(data_mgr_event_batch);
+	EVENT_SUBMIT(data_module_event_batch);
 }
 
 static void config_get(void)
 {
-	SEND_EVENT(data, DATA_MGR_EVT_CONFIG_GET);
+	SEND_EVENT(data, DATA_EVT_CONFIG_GET);
 }
 
 static void config_send(void)
 {
 	int err;
 	struct cloud_codec_data codec;
-	struct data_mgr_event *evt;
+	struct data_module_event *evt;
 
 	err = cloud_codec_encode_config(&codec, &current_cfg);
 	if (err) {
 		LOG_ERR("Error encoding configuration, error: %d", err);
-		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
+		SEND_ERROR(data, DATA_EVT_ERROR, err);
 		return;
 	}
 
-	evt = new_data_mgr_event();
-	evt->type = DATA_MGR_EVT_CONFIG_SEND;
+	evt = new_data_module_event();
+	evt->type = DATA_EVT_CONFIG_SEND;
 	evt->data.buffer.buf = codec.buf;
 	evt->data.buffer.len = codec.len;
 
@@ -391,7 +391,7 @@ static void config_send(void)
 static void data_ui_send(void)
 {
 	int err;
-	struct data_mgr_event *evt;
+	struct data_module_event *evt;
 	struct cloud_codec_data codec;
 
 	if (!date_time_is_valid()) {
@@ -405,12 +405,12 @@ static void data_ui_send(void)
 	err = cloud_codec_encode_ui_data(&codec, &ui_buf[head_ui_buf]);
 	if (err) {
 		LOG_ERR("Enconding button press, error: %d", err);
-		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
+		SEND_ERROR(data, DATA_EVT_ERROR, err);
 		return;
 	}
 
-	evt = new_data_mgr_event();
-	evt->type = DATA_MGR_EVT_UI_DATA_SEND;
+	evt = new_data_module_event();
+	evt->type = DATA_EVT_UI_DATA_SEND;
 	evt->data.buffer.buf = codec.buf;
 	evt->data.buffer.len = codec.len;
 
@@ -427,73 +427,73 @@ static void data_ui_send(void)
 
 static bool event_handler(const struct event_header *eh)
 {
-	if (is_modem_mgr_event(eh)) {
-		struct modem_mgr_event *event = cast_modem_mgr_event(eh);
+	if (is_modem_module_event(eh)) {
+		struct modem_module_event *event = cast_modem_module_event(eh);
 		struct data_msg_data data_msg = {
-			.manager.modem = *event
+			.module.modem = *event
 		};
 
 		module_enqueue_msg(&self, &data_msg);
 	}
 
-	if (is_cloud_mgr_event(eh)) {
-		struct cloud_mgr_event *event = cast_cloud_mgr_event(eh);
+	if (is_cloud_module_event(eh)) {
+		struct cloud_module_event *event = cast_cloud_module_event(eh);
 		struct data_msg_data data_msg = {
-			.manager.cloud = *event
+			.module.cloud = *event
 		};
 
 		module_enqueue_msg(&self, &data_msg);
 	}
 
-	if (is_gps_mgr_event(eh)) {
-		struct gps_mgr_event *event = cast_gps_mgr_event(eh);
+	if (is_gps_module_event(eh)) {
+		struct gps_module_event *event = cast_gps_module_event(eh);
 		struct data_msg_data data_msg = {
-			.manager.gps = *event
+			.module.gps = *event
 		};
 
 		module_enqueue_msg(&self, &data_msg);
 	}
 
-	if (is_sensor_mgr_event(eh)) {
-		struct sensor_mgr_event *event = cast_sensor_mgr_event(eh);
+	if (is_sensor_module_event(eh)) {
+		struct sensor_module_event *event = cast_sensor_module_event(eh);
 		struct data_msg_data data_msg = {
-			.manager.sensor = *event
+			.module.sensor = *event
 		};
 
 		module_enqueue_msg(&self, &data_msg);
 	}
 
-	if (is_ui_mgr_event(eh)) {
-		struct ui_mgr_event *event = cast_ui_mgr_event(eh);
+	if (is_ui_module_event(eh)) {
+		struct ui_module_event *event = cast_ui_module_event(eh);
 		struct data_msg_data data_msg = {
-			.manager.ui = *event
+			.module.ui = *event
 		};
 
 		module_enqueue_msg(&self, &data_msg);
 	}
 
-	if (is_app_mgr_event(eh)) {
-		struct app_mgr_event *event = cast_app_mgr_event(eh);
+	if (is_app_module_event(eh)) {
+		struct app_module_event *event = cast_app_module_event(eh);
 		struct data_msg_data data_msg = {
-			.manager.app = *event
+			.module.app = *event
 		};
 
 		module_enqueue_msg(&self, &data_msg);
 	}
 
-	if (is_data_mgr_event(eh)) {
-		struct data_mgr_event *event = cast_data_mgr_event(eh);
+	if (is_data_module_event(eh)) {
+		struct data_module_event *event = cast_data_module_event(eh);
 		struct data_msg_data data_msg = {
-			.manager.data = *event
+			.module.data = *event
 		};
 
 		module_enqueue_msg(&self, &data_msg);
 	}
 
-	if (is_util_mgr_event(eh)) {
-		struct util_mgr_event *event = cast_util_mgr_event(eh);
+	if (is_util_module_event(eh)) {
+		struct util_module_event *event = cast_util_module_event(eh);
 		struct data_msg_data data_msg = {
-			.manager.util = *event
+			.module.util = *event
 		};
 
 		module_enqueue_msg(&self, &data_msg);
@@ -510,13 +510,13 @@ static void clear_local_data_list(void)
 
 static void data_send_work_fn(struct k_work *work)
 {
-	SEND_EVENT(data, DATA_MGR_EVT_DATA_READY);
+	SEND_EVENT(data, DATA_EVT_DATA_READY);
 
 	clear_local_data_list();
 	k_delayed_work_cancel(&data_send_work);
 }
 
-static void data_status_set(enum app_mgr_data_type data_type)
+static void data_status_set(enum app_module_data_type data_type)
 {
 	for (size_t i = 0; i < received_data_type_count; i++) {
 		if (data_types_list[i] == data_type) {
@@ -530,7 +530,7 @@ static void data_status_set(enum app_mgr_data_type data_type)
 	}
 }
 
-static void data_list_set(enum app_mgr_data_type *data_list, size_t count)
+static void data_list_set(enum app_module_data_type *data_list, size_t count)
 {
 	if ((count == 0) || (count > APP_DATA_COUNT)) {
 		LOG_ERR("Invalid data type list length");
@@ -548,7 +548,7 @@ static void data_list_set(enum app_mgr_data_type *data_list, size_t count)
 
 static void on_cloud_state_disconnected(struct data_msg_data *msg)
 {
-	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONNECTED)) {
+	if (IS_EVENT(msg, cloud, CLOUD_EVT_CONNECTED)) {
 		date_time_update_async(date_time_event_handler);
 		state_set(CLOUD_STATE_CONNECTED);
 	}
@@ -556,43 +556,43 @@ static void on_cloud_state_disconnected(struct data_msg_data *msg)
 
 static void on_cloud_state_connected(struct data_msg_data *msg)
 {
-	if (IS_EVENT(msg, data, DATA_MGR_EVT_DATA_READY)) {
+	if (IS_EVENT(msg, data, DATA_EVT_DATA_READY)) {
 		data_send();
 		return;
 	}
 
-	if (IS_EVENT(msg, app, APP_MGR_EVT_CONFIG_GET)) {
+	if (IS_EVENT(msg, app, APP_EVT_CONFIG_GET)) {
 		config_get();
 		return;
 	}
 
-	if (IS_EVENT(msg, app, APP_MGR_EVT_CONFIG_SEND)) {
+	if (IS_EVENT(msg, app, APP_EVT_CONFIG_SEND)) {
 		config_send();
 		return;
 	}
 
-	if (IS_EVENT(msg, data, DATA_MGR_EVT_UI_DATA_READY)) {
+	if (IS_EVENT(msg, data, DATA_EVT_UI_DATA_READY)) {
 		data_ui_send();
 		return;
 	}
 
-	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_DISCONNECTED)) {
+	if (IS_EVENT(msg, cloud, CLOUD_EVT_DISCONNECTED)) {
 		state_set(CLOUD_STATE_DISCONNECTED);
 		return;
 	}
 
 	/* DIstribute new configuration received form cloud */
-	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_CONFIG_RECEIVED)) {
+	if (IS_EVENT(msg, cloud, CLOUD_EVT_CONFIG_RECEIVED)) {
 
 		int err;
 		bool config_change = false;
 		struct cloud_data_cfg new = {
-			.act = msg->manager.cloud.data.config.act,
-			.actw = msg->manager.cloud.data.config.actw,
-			.pasw = msg->manager.cloud.data.config.pasw,
-			.movt = msg->manager.cloud.data.config.movt,
-			.gpst = msg->manager.cloud.data.config.gpst,
-			.acct = msg->manager.cloud.data.config.acct,
+			.act = msg->module.cloud.data.config.act,
+			.actw = msg->module.cloud.data.config.actw,
+			.pasw = msg->module.cloud.data.config.pasw,
+			.movt = msg->module.cloud.data.config.movt,
+			.gpst = msg->module.cloud.data.config.gpst,
+			.acct = msg->module.cloud.data.config.acct,
 
 		};
 
@@ -658,7 +658,7 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 					err);
 			}
 
-			config_distribute(DATA_MGR_EVT_CONFIG_READY);
+			config_distribute(DATA_EVT_CONFIG_READY);
 		} else {
 			LOG_DBG("No change in device configuration");
 		}
@@ -667,97 +667,97 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 
 static void on_all_states(struct data_msg_data *msg)
 {
-	if (IS_EVENT(msg, app, APP_MGR_EVT_START)) {
-		config_distribute(DATA_MGR_EVT_CONFIG_INIT);
+	if (IS_EVENT(msg, app, APP_EVT_START)) {
+		config_distribute(DATA_EVT_CONFIG_INIT);
 	}
 
-	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
+	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {
 		/* The module doesn't have anything to shut down and can
 		 * report back immediately.
 		 */
-		SEND_EVENT(data, DATA_MGR_EVT_SHUTDOWN_READY);
+		SEND_EVENT(data, DATA_EVT_SHUTDOWN_READY);
 	}
 
-	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
+	if (IS_EVENT(msg, app, APP_EVT_DATA_GET)) {
 		/* Store which data is requested by the app, later to be used
 		 * to confirm data is reported to the data manger.
 		 */
-		data_list_set(msg->manager.app.data_list,
-			      msg->manager.app.count);
+		data_list_set(msg->module.app.data_list,
+			      msg->module.app.count);
 
 		/* Start countdown until data must have been received by the
-		 * data manager in order to be sent to cloud
+		 * Data module in order to be sent to cloud
 		 */
 		k_delayed_work_submit(&data_send_work,
-				      K_SECONDS(msg->manager.app.timeout));
+				      K_SECONDS(msg->module.app.timeout));
 
 		return;
 	}
 
-	if (IS_EVENT(msg, ui, UI_MGR_EVT_BUTTON_DATA_READY)) {
+	if (IS_EVENT(msg, ui, UI_EVT_BUTTON_DATA_READY)) {
 		cloud_codec_populate_ui_buffer(
 					ui_buf,
-					&msg->manager.ui.data.ui,
+					&msg->module.ui.data.ui,
 					&head_ui_buf);
 
-		SEND_EVENT(data, DATA_MGR_EVT_UI_DATA_READY);
+		SEND_EVENT(data, DATA_EVT_UI_DATA_READY);
 		return;
 	}
 
-	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_MODEM_DATA_READY)) {
+	if (IS_EVENT(msg, modem, MODEM_EVT_MODEM_DATA_READY)) {
 		cloud_codec_populate_modem_buffer(
 			modem_buf,
-			&msg->manager.modem.data.modem,
+			&msg->module.modem.data.modem,
 			&head_modem_buf);
 
 		data_status_set(APP_DATA_MODEM);
 	}
 
-	if (IS_EVENT(msg, modem, MODEM_MGR_EVT_BATTERY_DATA_READY)) {
+	if (IS_EVENT(msg, modem, MODEM_EVT_BATTERY_DATA_READY)) {
 		cloud_codec_populate_bat_buffer(
 			bat_buf,
-			&msg->manager.modem.data.bat,
+			&msg->module.modem.data.bat,
 			&head_bat_buf);
 
 		data_status_set(APP_DATA_BATTERY);
 	}
 
-	if (IS_EVENT(msg, sensor, SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY)) {
+	if (IS_EVENT(msg, sensor, SENSOR_EVT_ENVIRONMENTAL_DATA_READY)) {
 		cloud_codec_populate_sensor_buffer(
 			sensors_buf,
-			&msg->manager.sensor.data.sensors,
+			&msg->module.sensor.data.sensors,
 			&head_sensor_buf);
 
 		data_status_set(APP_DATA_ENVIRONMENTAL);
 	}
 
-	if (IS_EVENT(msg, sensor, SENSOR_MGR_EVT_MOVEMENT_DATA_READY)) {
+	if (IS_EVENT(msg, sensor, SENSOR_EVT_MOVEMENT_DATA_READY)) {
 		cloud_codec_populate_accel_buffer(
 			accel_buf,
-			&msg->manager.sensor.data.accel,
+			&msg->module.sensor.data.accel,
 			&head_accel_buf);
 	}
 
-	if (IS_EVENT(msg, gps, GPS_MGR_EVT_DATA_READY)) {
+	if (IS_EVENT(msg, gps, GPS_EVT_DATA_READY)) {
 		cloud_codec_populate_gps_buffer(
 			gps_buf,
-			&msg->manager.gps.data.gps,
+			&msg->module.gps.data.gps,
 			&head_gps_buf);
 
 		data_status_set(APP_DATA_GNSS);
 	}
 
-	if (IS_EVENT(msg, gps, GPS_MGR_EVT_TIMEOUT)) {
+	if (IS_EVENT(msg, gps, GPS_EVT_TIMEOUT)) {
 		data_status_set(APP_DATA_GNSS);
 	}
 
-	if (IS_EVENT(msg, cloud, CLOUD_MGR_EVT_DATA_ACK)) {
-		pending_data_ack(msg->manager.cloud.data.ptr);
+	if (IS_EVENT(msg, cloud, CLOUD_EVT_DATA_ACK)) {
+		pending_data_ack(msg->module.cloud.data.ptr);
 		return;
 	}
 }
 
-static void data_manager(void)
+static void data_module(void)
 {
 	int err;
 	struct data_msg_data msg;
@@ -769,7 +769,7 @@ static void data_manager(void)
 	err = setup();
 	if (err) {
 		LOG_ERR("setup, error: %d", err);
-		SEND_ERROR(data, DATA_MGR_EVT_ERROR, err);
+		SEND_ERROR(data, DATA_EVT_ERROR, err);
 	}
 
 	state_set(CLOUD_STATE_DISCONNECTED);
@@ -793,16 +793,16 @@ static void data_manager(void)
 	}
 }
 
-K_THREAD_DEFINE(data_manager_thread, CONFIG_DATA_MGR_THREAD_STACK_SIZE,
-		data_manager, NULL, NULL, NULL,
+K_THREAD_DEFINE(data_module_thread, CONFIG_DATATHREAD_STACK_SIZE,
+		data_module, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 
 EVENT_LISTENER(MODULE, event_handler);
-EVENT_SUBSCRIBE(MODULE, app_mgr_event);
-EVENT_SUBSCRIBE(MODULE, util_mgr_event);
-EVENT_SUBSCRIBE(MODULE, data_mgr_event);
-EVENT_SUBSCRIBE_EARLY(MODULE, modem_mgr_event);
-EVENT_SUBSCRIBE_EARLY(MODULE, cloud_mgr_event);
-EVENT_SUBSCRIBE_EARLY(MODULE, gps_mgr_event);
-EVENT_SUBSCRIBE_EARLY(MODULE, ui_mgr_event);
-EVENT_SUBSCRIBE_EARLY(MODULE, sensor_mgr_event);
+EVENT_SUBSCRIBE(MODULE, app_module_event);
+EVENT_SUBSCRIBE(MODULE, util_module_event);
+EVENT_SUBSCRIBE(MODULE, data_module_event);
+EVENT_SUBSCRIBE_EARLY(MODULE, modem_module_event);
+EVENT_SUBSCRIBE_EARLY(MODULE, cloud_module_event);
+EVENT_SUBSCRIBE_EARLY(MODULE, gps_module_event);
+EVENT_SUBSCRIBE_EARLY(MODULE, ui_module_event);
+EVENT_SUBSCRIBE_EARLY(MODULE, sensor_module_event);

@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _GPS_MGR_EVENT_H_
-#define _GPS_MGR_EVENT_H_
+#ifndef _GPS_EVENT_H_
+#define _GPS_EVENT_H_
 
 /**
  * @brief GPS Event
- * @defgroup gps_mgr_event GPS Event
+ * @defgroup gps_module_event GPS Event
  * @{
  */
 
@@ -22,21 +22,21 @@
 extern "C" {
 #endif
 
-/** @brief GPS event types submitted by GPS manager. */
-enum gps_mgr_event_type {
-	GPS_MGR_EVT_DATA_READY,
-	GPS_MGR_EVT_TIMEOUT,
-	GPS_MGR_EVT_ACTIVE,
-	GPS_MGR_EVT_INACTIVE,
-	GPS_MGR_EVT_SHUTDOWN_READY,
-	GPS_MGR_EVT_AGPS_NEEDED,
-	GPS_MGR_EVT_ERROR
+/** @brief GPS event types submitted by GPS module. */
+enum gps_module_event_type {
+	GPS_EVT_DATA_READY,
+	GPS_EVT_TIMEOUT,
+	GPS_EVT_ACTIVE,
+	GPS_EVT_INACTIVE,
+	GPS_EVT_SHUTDOWN_READY,
+	GPS_EVT_AGPS_NEEDED,
+	GPS_EVT_ERROR_CODE,
 };
 
 /** @brief GPS event. */
-struct gps_mgr_event {
+struct gps_module_event {
 	struct event_header header;
-	enum gps_mgr_event_type type;
+	enum gps_module_event_type type;
 
 	union {
 		struct cloud_data_gps gps;
@@ -45,7 +45,7 @@ struct gps_mgr_event {
 	} data;
 };
 
-EVENT_TYPE_DECLARE(gps_mgr_event);
+EVENT_TYPE_DECLARE(gps_module_event);
 
 #ifdef __cplusplus
 }
@@ -55,4 +55,4 @@ EVENT_TYPE_DECLARE(gps_mgr_event);
  * @}
  */
 
-#endif /* _GPS_MGR_EVENT_H_ */
+#endif /* _GPS_EVENT_H_ */

@@ -11,7 +11,7 @@ config CAT_TRACKER_APP_VERSION
 	default "0.0.0-development"
 
 rsource "src/events/Kconfig"
-rsource "src/managers/Kconfig"
+rsource "src/modules/Kconfig"
 rsource "src/watchdog/Kconfig"
 
 endmenu

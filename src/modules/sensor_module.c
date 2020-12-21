@@ -11,29 +11,29 @@
 
 #include "ext_sensors.h"
 
-#define MODULE sensor_manager
+#define MODULE sensor_module
 
 #include "modules_common.h"
-#include "events/app_mgr_event.h"
-#include "events/data_mgr_event.h"
-#include "events/sensor_mgr_event.h"
-#include "events/util_mgr_event.h"
+#include "events/app_module_event.h"
+#include "events/data_module_event.h"
+#include "events/sensor_module_event.h"
+#include "events/util_module_event.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(sensor_manager, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(sensor_module, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
 struct sensor_msg_data {
 	union {
-		struct app_mgr_event app;
-		struct data_mgr_event data;
-		struct util_mgr_event util;
-	} manager;
+		struct app_module_event app;
+		struct data_module_event data;
+		struct util_module_event util;
+	} module;
 };
 
-/* Sensor manager super states. */
-enum sensor_manager_state {
-	SENSOR_MGR_STATE_INIT,
-	SENSOR_MGR_STATE_RUNNING
+/* Sensor module super states. */
+enum sensor_module_state {
+	SENSORSTATE_INIT,
+	SENSORSTATE_RUNNING
 } sensor_state;
 
 K_MSGQ_DEFINE(msgq_sensor, sizeof(struct sensor_msg_data), 10, 4);
@@ -54,20 +54,20 @@ static void movement_data_send(const struct ext_sensor_evt *const acc_data)
 	if (k_uptime_get() - buf_entry_try_again_timeout >
 	    1000 * CONFIG_TIME_BETWEEN_ACCELEROMETER_BUFFER_STORE_SEC) {
 
-		struct sensor_mgr_event *sensor_mgr_event =
-				new_sensor_mgr_event();
+		struct sensor_module_event *sensor_module_event =
+				new_sensor_module_event();
 
-		sensor_mgr_event->data.accel.values[0] =
+		sensor_module_event->data.accel.values[0] =
 				acc_data->value_array[0];
-		sensor_mgr_event->data.accel.values[1] =
+		sensor_module_event->data.accel.values[1] =
 				acc_data->value_array[1];
-		sensor_mgr_event->data.accel.values[2] =
+		sensor_module_event->data.accel.values[2] =
 				acc_data->value_array[2];
-		sensor_mgr_event->data.accel.ts = k_uptime_get();
-		sensor_mgr_event->data.accel.queued = true;
-		sensor_mgr_event->type = SENSOR_MGR_EVT_MOVEMENT_DATA_READY;
+		sensor_module_event->data.accel.ts = k_uptime_get();
+		sensor_module_event->data.accel.queued = true;
+		sensor_module_event->type = SENSOR_EVT_MOVEMENT_DATA_READY;
 
-		EVENT_SUBMIT(sensor_mgr_event);
+		EVENT_SUBMIT(sensor_module_event);
 
 		buf_entry_try_again_timeout = k_uptime_get();
 	}
@@ -87,7 +87,7 @@ static void ext_sensor_handler(const struct ext_sensor_evt *const evt)
 
 static int environmental_data_get(void)
 {
-	struct sensor_mgr_event *sensor_mgr_event;
+	struct sensor_module_event *sensor_module_event;
 #if defined(CONFIG_EXTERNAL_SENSORS)
 	int err;
 	double temp, hum;
@@ -105,17 +105,17 @@ static int environmental_data_get(void)
 		return err;
 	}
 
-	sensor_mgr_event = new_sensor_mgr_event();
-	sensor_mgr_event->data.sensors.env_ts = k_uptime_get();
-	sensor_mgr_event->data.sensors.temp = temp;
-	sensor_mgr_event->data.sensors.hum = hum;
-	sensor_mgr_event->data.sensors.queued = true;
-	sensor_mgr_event->type = SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY;
+	sensor_module_event = new_sensor_module_event();
+	sensor_module_event->data.sensors.env_ts = k_uptime_get();
+	sensor_module_event->data.sensors.temp = temp;
+	sensor_module_event->data.sensors.hum = hum;
+	sensor_module_event->data.sensors.queued = true;
+	sensor_module_event->type = SENSOR_EVT_ENVIRONMENTAL_DATA_READY;
 #else
 
 	/* This event must be sent even though environmental sensors are not
-	 * available on the nRF9160DK. This is because the data manager expects
-	 * responses from the different managers within a certain amounf of time
+	 * available on the nRF9160DK. This is because the Data module expects
+	 * responses from the different modules within a certain amounf of time
 	 * after the APP_EVT_DATA_GET event has been emitted.
 	 */
 	LOG_DBG("No external sensors, submitting dummy sensor data");
@@ -123,11 +123,11 @@ static int environmental_data_get(void)
 	/* Set this entry to false signifying that the event carries no data.
 	 * This makes sure that the entry is not stored in the circular buffer.
 	 */
-	sensor_mgr_event = new_sensor_mgr_event();
-	sensor_mgr_event->data.sensors.queued = false;
-	sensor_mgr_event->type = SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY;
+	sensor_module_event = new_sensor_module_event();
+	sensor_module_event->data.sensors.queued = false;
+	sensor_module_event->type = SENSOR_EVT_ENVIRONMENTAL_DATA_READY;
 #endif
-	EVENT_SUBMIT(sensor_mgr_event);
+	EVENT_SUBMIT(sensor_module_event);
 
 	return 0;
 }
@@ -148,28 +148,28 @@ static int setup(void)
 
 static bool event_handler(const struct event_header *eh)
 {
-	if (is_app_mgr_event(eh)) {
-		struct app_mgr_event *event = cast_app_mgr_event(eh);
+	if (is_app_module_event(eh)) {
+		struct app_module_event *event = cast_app_module_event(eh);
 		struct sensor_msg_data sensor_msg = {
-			.manager.app = *event
+			.module.app = *event
 		};
 
 		module_enqueue_msg(&self, &sensor_msg);
 	}
 
-	if (is_data_mgr_event(eh)) {
-		struct data_mgr_event *event = cast_data_mgr_event(eh);
+	if (is_data_module_event(eh)) {
+		struct data_module_event *event = cast_data_module_event(eh);
 		struct sensor_msg_data sensor_msg = {
-			.manager.data = *event
+			.module.data = *event
 		};
 
 		module_enqueue_msg(&self, &sensor_msg);
 	}
 
-	if (is_util_mgr_event(eh)) {
-		struct util_mgr_event *event = cast_util_mgr_event(eh);
+	if (is_util_module_event(eh)) {
+		struct util_module_event *event = cast_util_module_event(eh);
 		struct sensor_msg_data sensor_msg = {
-			.manager.util = *event
+			.module.util = *event
 		};
 
 		module_enqueue_msg(&self, &sensor_msg);
@@ -178,7 +178,7 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
-static bool environmental_data_requested(enum app_mgr_data_type *data_list,
+static bool environmental_data_requested(enum app_module_data_type *data_list,
 					 size_t count)
 {
 	for (size_t i = 0; i < count; i++) {
@@ -192,28 +192,28 @@ static bool environmental_data_requested(enum app_mgr_data_type *data_list,
 
 static void on_state_init(struct sensor_msg_data *msg)
 {
-	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_INIT)) {
-		int movement_threshold = msg->manager.data.data.cfg.acct;
+	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
+		int movement_threshold = msg->module.data.data.cfg.acct;
 
 		ext_sensors_mov_thres_set(movement_threshold);
 
-		sensor_state = SENSOR_MGR_STATE_RUNNING;
+		sensor_state = SENSORSTATE_RUNNING;
 	}
 }
 
 static void on_state_running(struct sensor_msg_data *msg)
 {
-	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
+	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
 
-		int movement_threshold = msg->manager.data.data.cfg.acct;
+		int movement_threshold = msg->module.data.data.cfg.acct;
 
 		ext_sensors_mov_thres_set(movement_threshold);
 	}
 
-	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET)) {
+	if (IS_EVENT(msg, app, APP_EVT_DATA_GET)) {
 		if (!environmental_data_requested(
-			msg->manager.app.data_list,
-			msg->manager.app.count)) {
+			msg->module.app.data_list,
+			msg->module.app.count)) {
 			return;
 		}
 
@@ -222,19 +222,19 @@ static void on_state_running(struct sensor_msg_data *msg)
 		err = environmental_data_get();
 		if (err) {
 			LOG_ERR("environmental_data_get, error: %d", err);
-			SEND_ERROR(sensor, SENSOR_MGR_EVT_ERROR, err);
+			SEND_ERROR(sensor, SENSOR_EVT_ERROR, err);
 		}
 	}
 }
 
 static void on_all_states(struct sensor_msg_data *msg)
 {
-	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
-		SEND_EVENT(sensor, SENSOR_MGR_EVT_SHUTDOWN_READY);
+	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {
+		SEND_EVENT(sensor, SENSOR_EVT_SHUTDOWN_READY);
 	}
 }
 
-static void sensor_manager(void)
+static void sensor_module(void)
 {
 	int err;
 
@@ -247,21 +247,21 @@ static void sensor_manager(void)
 	err = setup();
 	if (err) {
 		LOG_ERR("setup, error: %d", err);
-		SEND_ERROR(sensor, SENSOR_MGR_EVT_ERROR, err);
+		SEND_ERROR(sensor, SENSOR_EVT_ERROR, err);
 	}
 
 	while (true) {
 		module_get_next_msg(&self, &msg);
 
 		switch (sensor_state) {
-		case SENSOR_MGR_STATE_INIT:
+		case SENSORSTATE_INIT:
 			on_state_init(&msg);
 			break;
-		case SENSOR_MGR_STATE_RUNNING:
+		case SENSORSTATE_RUNNING:
 			on_state_running(&msg);
 			break;
 		default:
-			LOG_WRN("Unknown sensor manager state.");
+			LOG_WRN("Unknown sensor module state.");
 			break;
 		}
 
@@ -269,11 +269,11 @@ static void sensor_manager(void)
 	}
 }
 
-K_THREAD_DEFINE(sensor_manager_thread, CONFIG_SENSOR_MGR_THREAD_STACK_SIZE,
-		sensor_manager, NULL, NULL, NULL,
+K_THREAD_DEFINE(sensor_module_thread, CONFIG_SENSORTHREAD_STACK_SIZE,
+		sensor_module, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 
 EVENT_LISTENER(MODULE, event_handler);
-EVENT_SUBSCRIBE(MODULE, app_mgr_event);
-EVENT_SUBSCRIBE(MODULE, data_mgr_event);
-EVENT_SUBSCRIBE(MODULE, util_mgr_event);
+EVENT_SUBSCRIBE(MODULE, app_module_event);
+EVENT_SUBSCRIBE(MODULE, data_module_event);
+EVENT_SUBSCRIBE(MODULE, util_module_event);

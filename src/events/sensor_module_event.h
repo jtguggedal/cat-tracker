@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _SENSOR_MGR_EVENT_H_
-#define _SENSOR_MGR_EVENT_H_
+#ifndef _SENSOR_EVENT_H_
+#define _SENSOR_EVENT_H_
 
 /**
  * @brief Sensor Event
- * @defgroup sensor_mgr_event Sensor Event
+ * @defgroup sensor_module_event Sensor Event
  * @{
  */
 
@@ -20,18 +20,18 @@
 extern "C" {
 #endif
 
-/** @brief Sensor event types su bmitted by Sensor manager. */
-enum sensor_mgr_event_types {
-	SENSOR_MGR_EVT_MOVEMENT_DATA_READY,
-	SENSOR_MGR_EVT_ENVIRONMENTAL_DATA_READY,
-	SENSOR_MGR_EVT_SHUTDOWN_READY,
-	SENSOR_MGR_EVT_ERROR
+/** @brief Sensor event types su bmitted by Sensor module. */
+enum sensor_module_event_types {
+	SENSOR_EVT_MOVEMENT_DATA_READY,
+	SENSOR_EVT_ENVIRONMENTAL_DATA_READY,
+	SENSOR_EVT_SHUTDOWN_READY,
+	SENSOR_EVT_ERROR
 };
 
 /** @brief Sensor event. */
-struct sensor_mgr_event {
+struct sensor_module_event {
 	struct event_header header;
-	enum sensor_mgr_event_types type;
+	enum sensor_module_event_types type;
 	union {
 		struct cloud_data_sensors sensors;
 		struct cloud_data_accelerometer accel;
@@ -39,7 +39,7 @@ struct sensor_mgr_event {
 	} data;
 };
 
-EVENT_TYPE_DECLARE(sensor_mgr_event);
+EVENT_TYPE_DECLARE(sensor_module_event);
 
 #ifdef __cplusplus
 }
@@ -49,4 +49,4 @@ EVENT_TYPE_DECLARE(sensor_mgr_event);
  * @}
  */
 
-#endif /* _SENSOR_MGR_EVENT_H_ */
+#endif /* _SENSOR_EVENT_H_ */

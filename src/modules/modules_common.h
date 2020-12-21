@@ -7,17 +7,17 @@
 #ifndef _MODULES_COMMON_H_
 #define _MODULES_COMMON_H_
 
-#define IS_EVENT(_ptr, _mgr, _evt) \
-		is_ ## _mgr ## _mgr_event(&_ptr->manager._mgr.header) && \
-		_ptr->manager._mgr.type == _evt
+#define IS_EVENT(_ptr, _mod, _evt) \
+		is_ ## _mod ## _module_event(&_ptr->module._mod.header) &&     \
+		_ptr->module._mod.type == _evt
 
-#define SEND_EVENT(_mgr, _type)					      \
-	struct _mgr ## _mgr_event *event = new_ ## _mgr ## _mgr_event();      \
-	event->type = _type;						      \
+#define SEND_EVENT(_mod, _type)						       \
+	struct _mod ## _module_event *event = new_ ## _mod ## _module_event(); \
+	event->type = _type;						       \
 	EVENT_SUBMIT(event)
 
-#define SEND_ERROR(_mgr, _type, _error_code)				      \
-	struct _mgr ## _mgr_event *event = new_ ## _mgr ## _mgr_event();      \
+#define SEND_ERROR(_mod, _type, _error_code)				      \
+	struct _mod ## _module_event *event = new_ ## _mod ## _module_event(); \
 	event->type = _type;						      \
 	event->data.err = _error_code;					      \
 	EVENT_SUBMIT(event)

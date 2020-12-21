@@ -4,15 +4,15 @@
 # SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
 #
 
-menu "GPS manager"
+menu "GPS module"
 
-config GPS_MANAGER
+config GPS_MODULE
 	bool ""
 	default y
 
-if GPS_MANAGER
+if GPS_MODULE
 
-config GPS_MGR_THREAD_STACK_SIZE
+config GPSTHREAD_STACK_SIZE
 	int ""
 	default 1024
 
@@ -22,21 +22,21 @@ config GPS_DEV_NAME
 
 endif
 
-endmenu # GPS manager
+endmenu # GPS module
 
-menu "Modem manager"
+menu "Modem module"
 
-config MODEM_MANAGER
+config MODEM_MODULE
 	bool
 	default y
 
-if MODEM_MANAGER
+if MODEM_MODULE
 
-config MODEM_MGR_AUTO_REQUEST_POWER_SAVING_FEATURES
+config MODEMAUTO_REQUEST_POWER_SAVING_FEATURES
 	bool "Request LTE power saving features when establishing a LTE link"
 	default y
 
-config MODEM_MGR_THREAD_STACK_SIZE
+config MODEMTHREAD_STACK_SIZE
 	int ""
 	default 1024
 
@@ -46,17 +46,17 @@ config EXPECTED_MODEM_FIRMWARE_VERSION
 
 endif
 
-endmenu # Modem manager
+endmenu # Modem module
 
-menu "Cloud manager"
+menu "Cloud module"
 
-config CLOUD_MANAGER
+config CLOUD_MODULE
 	bool ""
 	default y
 
-if CLOUD_MANAGER
+if CLOUD_MODULE
 
-config CLOUD_MGR_THREAD_STACK_SIZE
+config CLOUDTHREAD_STACK_SIZE
 	int ""
 	default 6000
 
@@ -82,34 +82,34 @@ config CLOUD_CONNECT_RETRIES
 
 endif
 
-endmenu # Cloud manager
+endmenu # Cloud module
 
-menu "UI manager"
+menu "UI module"
 
-config UI_MANAGER
+config UI_MODULE
 	bool ""
 	default y
 
-if UI_MANAGER
+if UI_MODULE
 
-config UI_MGR_THREAD_STACK_SIZE
+config UITHREAD_STACK_SIZE
 	int ""
 	default 256
 
 endif
 
-endmenu # UI manager
+endmenu # UI module
 
-menu "OUTPUT manager"
+menu "OUTPUT module"
 
-config OUTPUT_MANAGER
+config OUTPUT_MODULE
 	bool ""
 	select USE_UI_MODULE
 	default y
 
-if OUTPUT_MANAGER
+if OUTPUT_MODULE
 
-config OUTPUT_MGR_THREAD_STACK_SIZE
+config OUTPUTTHREAD_STACK_SIZE
 	int ""
 	default 512
 
@@ -117,17 +117,17 @@ rsource "../ui/Kconfig"
 
 endif
 
-endmenu # OUTPUT manager
+endmenu # OUTPUT module
 
-menu "Data manager"
+menu "Data module"
 
-config DATA_MANAGER
+config DATA_MODULE
 	bool ""
 	default y
 
-if DATA_MANAGER
+if DATA_MODULE
 
-config DATA_MGR_THREAD_STACK_SIZE
+config DATATHREAD_STACK_SIZE
 	int ""
 	default 2048
 
@@ -135,17 +135,17 @@ rsource "../cloud/cloud_codec/Kconfig"
 
 endif
 
-endmenu # Data manager
+endmenu # Data module
 
-menu "Sensor manager"
+menu "Sensor module"
 
-config SENSOR_MANAGER
+config SENSOR_MODULE
 	bool ""
 	default y
 
-if SENSOR_MANAGER
+if SENSOR_MODULE
 
-config SENSOR_MGR_THREAD_STACK_SIZE
+config SENSORTHREAD_STACK_SIZE
 	int ""
 	default 1024
 
@@ -153,17 +153,17 @@ rsource "../ext_sensors/Kconfig"
 
 endif
 
-endmenu # Sensor manager
+endmenu # Sensor module
 
-menu "Utility Manager"
+menu "Utility module"
 
-config UTIL_MANAGER
+config UTIL_MODULE
 	bool ""
 	default y
 
-if UTIL_MANAGER
+if UTIL_MODULE
 
-config UTIL_MGR_THREAD_STACK_SIZE
+config UTILTHREAD_STACK_SIZE
 	int ""
 	default 1024
 
@@ -171,10 +171,10 @@ config REBOOT_TIMEOUT
 	int "Sets the time from a fatal error or reboot request to reboot"
 	default 30
 	help
-	  This option specifies the timeout that the utility manager will
-	  initiate a reboot regardless if the other managers has reported
+	  This option specifies the timeout that the utility module will
+	  initiate a reboot regardless if the other modules has reported
 	  that they are ready for a reboot or not.
 
 endif
 
-endmenu # Utility Manager
+endmenu # Utility module

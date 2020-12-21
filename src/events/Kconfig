@@ -10,40 +10,40 @@ menu "Event options"
 
 comment "Initially logged events"
 
-config APP_MGR_EVENTS_LOG
-	bool "Enable logging for application manager events"
+config APP_EVENTS_LOG
+	bool "Enable logging for application module events"
 	default y
 
-config MODEM_MGR_EVENTS_LOG
-	bool "Enable logging for modem manager events"
+config MODEM_EVENTS_LOG
+	bool "Enable logging for modem module events"
 	default y
 
-config CLOUD_MGR_EVENTS_LOG
-	bool "Enable logging for cloud manager events"
+config CLOUD_EVENTS_LOG
+	bool "Enable logging for Cloud module events"
 	default y
 
-config SENSOR_MGR_EVENTS_LOG
-	bool "Enable logging for sensor manager events"
+config SENSOR_EVENTS_LOG
+	bool "Enable logging for sensor module events"
 	default y
 
-config UI_MGR_EVENTS_LOG
-	bool "Enable logging for UI manager events"
+config UI_EVENTS_LOG
+	bool "Enable logging for UI module events"
 	default y
 
-config UTIL_MGR_EVENTS_LOG
-	bool "Enable logging for utility manager events"
+config UTIL_EVENTS_LOG
+	bool "Enable logging for utility module events"
 	default y
 
-config GPS_MGR_EVENTS_LOG
-	bool "Enable logging for GPS manager events"
+config GPS_EVENTS_LOG
+	bool "Enable logging for GPS module events"
 	default y
 
-config DATA_MGR_EVENTS_LOG
-	bool "Enable logging for data manager events"
+config DATA_EVENTS_LOG
+	bool "Enable logging for data module events"
 	default y
 
-config OUTPUT_MGR_EVENTS_LOG
-	bool "Enable logging for output manager events"
+config OUTPUT_EVENTS_LOG
+	bool "Enable logging for output module events"
 	default y
 
 endmenu

@@ -15,40 +15,40 @@
 #endif
 
 /* Module name is used by the event manager macros in this file */
-#define MODULE app_manager
+#define MODULE app_module
 
 #include "modules_common.h"
-#include "events/app_mgr_event.h"
-#include "events/cloud_mgr_event.h"
-#include "events/data_mgr_event.h"
-#include "events/sensor_mgr_event.h"
-#include "events/ui_mgr_event.h"
-#include "events/util_mgr_event.h"
-#include "events/modem_mgr_event.h"
-#include "events/output_mgr_event.h"
+#include "events/app_module_event.h"
+#include "events/cloud_module_event.h"
+#include "events/data_module_event.h"
+#include "events/sensor_module_event.h"
+#include "events/ui_module_event.h"
+#include "events/util_module_event.h"
+#include "events/modem_module_event.h"
+#include "events/output_module_event.h"
 
 #include <logging/log.h>
 #include <logging/log_ctrl.h>
 
 LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
 
-/* Message structure. Events from other managers are converted to messages
+/* Message structure. Events from other modules are converted to messages
  * in the event manager handler, and then queued up in the message queue
  * for processing in the main thread.
  */
 struct app_msg_data {
 	union {
-		struct cloud_mgr_event cloud;
-		struct ui_mgr_event ui;
-		struct sensor_mgr_event sensor;
-		struct data_mgr_event data;
-		struct util_mgr_event util;
-		struct modem_mgr_event modem;
-		struct app_mgr_event app;
-	} manager;
+		struct cloud_module_event cloud;
+		struct ui_module_event ui;
+		struct sensor_module_event sensor;
+		struct data_module_event data;
+		struct util_module_event util;
+		struct modem_module_event modem;
+		struct app_module_event app;
+	} module;
 };
 
-/* Application manager super states. */
+/* Application module super states. */
 enum app_state {
 	APP_STATE_INIT,
 	APP_STATE_RUNNING
@@ -76,7 +76,7 @@ static struct cloud_data_cfg app_cfg;
  */
 static void data_sample_timer_handler(struct k_timer *timer);
 
-/* Application manager message queue. */
+/* Application module message queue. */
 #define APP_QUEUE_ENTRY_COUNT		10
 #define APP_QUEUE_BYTE_ALIGNMENT	4
 
@@ -161,55 +161,55 @@ static void sub_state_set(enum app_sub_state new_state)
  */
 static bool event_handler(const struct event_header *eh)
 {
-	if (is_cloud_mgr_event(eh)) {
-		struct cloud_mgr_event *event = cast_cloud_mgr_event(eh);
+	if (is_cloud_module_event(eh)) {
+		struct cloud_module_event *event = cast_cloud_module_event(eh);
 		struct app_msg_data app_msg = {
-			.manager.cloud = *event
+			.module.cloud = *event
 		};
 
 		module_enqueue_msg(&self, &app_msg);
 	}
 
-	if (is_app_mgr_event(eh)) {
-		struct app_mgr_event *event = cast_app_mgr_event(eh);
+	if (is_app_module_event(eh)) {
+		struct app_module_event *event = cast_app_module_event(eh);
 		struct app_msg_data app_msg = {
-			.manager.app = *event
+			.module.app = *event
 		};
 
 		module_enqueue_msg(&self, &app_msg);
 	}
 
-	if (is_data_mgr_event(eh)) {
-		struct data_mgr_event *event = cast_data_mgr_event(eh);
+	if (is_data_module_event(eh)) {
+		struct data_module_event *event = cast_data_module_event(eh);
 		struct app_msg_data app_msg = {
-			.manager.data = *event
+			.module.data = *event
 		};
 
 		module_enqueue_msg(&self, &app_msg);
 	}
 
-	if (is_sensor_mgr_event(eh)) {
-		struct sensor_mgr_event *event = cast_sensor_mgr_event(eh);
+	if (is_sensor_module_event(eh)) {
+		struct sensor_module_event *event = cast_sensor_module_event(eh);
 		struct app_msg_data app_msg = {
-			.manager.sensor = *event
+			.module.sensor = *event
 		};
 
 		module_enqueue_msg(&self, &app_msg);
 	}
 
-	if (is_util_mgr_event(eh)) {
-		struct util_mgr_event *event = cast_util_mgr_event(eh);
+	if (is_util_module_event(eh)) {
+		struct util_module_event *event = cast_util_module_event(eh);
 		struct app_msg_data app_msg = {
-			.manager.util = *event
+			.module.util = *event
 		};
 
 		module_enqueue_msg(&self, &app_msg);
 	}
 
-	if (is_modem_mgr_event(eh)) {
-		struct modem_mgr_event *event = cast_modem_mgr_event(eh);
+	if (is_modem_module_event(eh)) {
+		struct modem_module_event *event = cast_modem_module_event(eh);
 		struct app_msg_data app_msg = {
-			.manager.modem = *event
+			.module.modem = *event
 		};
 
 		module_enqueue_msg(&self, &app_msg);
@@ -220,59 +220,59 @@ static bool event_handler(const struct event_header *eh)
 
 static void data_get_init(void)
 {
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
+	struct app_module_event *app_module_event = new_app_module_event();
 
 	/* Specify which data that is to be included in the transmission. */
-	app_mgr_event->data_list[0] = APP_DATA_MODEM;
-	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
-	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
+	app_module_event->data_list[0] = APP_DATA_MODEM;
+	app_module_event->data_list[1] = APP_DATA_BATTERY;
+	app_module_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
 
-	/* Set list count to number of data types passed in app_mgr_event. */
-	app_mgr_event->count = 3;
-	app_mgr_event->type = APP_MGR_EVT_DATA_GET;
+	/* Set list count to number of data types passed in app_module_event. */
+	app_module_event->count = 3;
+	app_module_event->type = APP_EVT_DATA_GET;
 
-	/* Specify a timeout that each manager has to fetch data. If data is not
+	/* Specify a timeout that each module has to fetch data. If data is not
 	 * fetched within this timeout, the data that is available is sent.
 	 */
-	app_mgr_event->timeout = 10;
+	app_module_event->timeout = 10;
 
-	EVENT_SUBMIT(app_mgr_event);
+	EVENT_SUBMIT(app_module_event);
 }
 
 static void data_get_all(void)
 {
-	struct app_mgr_event *app_mgr_event = new_app_mgr_event();
+	struct app_module_event *app_module_event = new_app_module_event();
 
 	/* Specify which data that is to be included in the transmission. */
-	app_mgr_event->data_list[0] = APP_DATA_MODEM;
-	app_mgr_event->data_list[1] = APP_DATA_BATTERY;
-	app_mgr_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
-	app_mgr_event->data_list[3] = APP_DATA_GNSS;
+	app_module_event->data_list[0] = APP_DATA_MODEM;
+	app_module_event->data_list[1] = APP_DATA_BATTERY;
+	app_module_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
+	app_module_event->data_list[3] = APP_DATA_GNSS;
 
-	/* Set list count to number of data types passed in app_mgr_event. */
-	app_mgr_event->count = 4;
-	app_mgr_event->type = APP_MGR_EVT_DATA_GET;
+	/* Set list count to number of data types passed in app_module_event. */
+	app_module_event->count = 4;
+	app_module_event->type = APP_EVT_DATA_GET;
 
-	/* Specify a timeout that each manager has to fetch data. If data is not
+	/* Specify a timeout that each module has to fetch data. If data is not
 	 * fetched within this timeout, the data that is available is sent.
 	 */
-	app_mgr_event->timeout = app_cfg.gpst + 60;
+	app_module_event->timeout = app_cfg.gpst + 60;
 
-	EVENT_SUBMIT(app_mgr_event);
+	EVENT_SUBMIT(app_module_event);
 }
 
 static void data_sample_timer_handler(struct k_timer *timer)
 {
 	ARG_UNUSED(timer);
-	SEND_EVENT(app, APP_MGR_EVT_DATA_GET_ALL);
+	SEND_EVENT(app, APP_EVT_DATA_GET_ALL);
 }
 
 /* Message handler for APP_STATE_INIT. */
 static void on_state_init(struct app_msg_data *msg)
 {
-	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_INIT)) {
+	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
 		/* Keep a copy of the new configuration. */
-		app_cfg = msg->manager.data.data.cfg;
+		app_cfg = msg->module.data.data.cfg;
 
 		if (app_cfg.act) {
 			LOG_INF("Device mode: Active");
@@ -300,11 +300,11 @@ static void on_state_init(struct app_msg_data *msg)
 /* Message handler for APP_STATE_RUNNING. */
 static void on_state_running(struct app_msg_data *msg)
 {
-	if (IS_EVENT(msg, data, DATA_MGR_EVT_DATE_TIME_OBTAINED)) {
+	if (IS_EVENT(msg, data, DATA_EVT_DATE_TIME_OBTAINED)) {
 		data_get_init();
 	}
 
-	if (IS_EVENT(msg, app, APP_MGR_EVT_DATA_GET_ALL)) {
+	if (IS_EVENT(msg, app, APP_EVT_DATA_GET_ALL)) {
 		data_get_all();
 	}
 }
@@ -312,12 +312,12 @@ static void on_state_running(struct app_msg_data *msg)
 /* Message handler for APP_SUB_STATE_PASSIVE_MODE. */
 void on_sub_state_passive(struct app_msg_data *msg)
 {
-	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
+	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
 		/* Keep a copy of the new configuration. */
-		app_cfg = msg->manager.data.data.cfg;
+		app_cfg = msg->module.data.data.cfg;
 
 		/*Acknowledge configuration to cloud. */
-		SEND_EVENT(app, APP_MGR_EVT_CONFIG_SEND);
+		SEND_EVENT(app, APP_EVT_CONFIG_SEND);
 
 		if (app_cfg.act) {
 			LOG_INF("Device mode: Active");
@@ -341,7 +341,7 @@ void on_sub_state_passive(struct app_msg_data *msg)
 		k_timer_stop(&data_sample_timer);
 	}
 
-	if (IS_EVENT(msg, sensor, SENSOR_MGR_EVT_MOVEMENT_DATA_READY)) {
+	if (IS_EVENT(msg, sensor, SENSOR_EVT_MOVEMENT_DATA_READY)) {
 		if (k_timer_remaining_get(&movement_resolution_timer) == 0) {
 			/* Do an initial data sample. */
 			data_sample_timer_handler(NULL);
@@ -364,12 +364,12 @@ void on_sub_state_passive(struct app_msg_data *msg)
 /* Message handler for APP_SUB_STATE_ACTIVE_MODE. */
 static void on_sub_state_active(struct app_msg_data *msg)
 {
-	if (IS_EVENT(msg, data, DATA_MGR_EVT_CONFIG_READY)) {
+	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
 		/* Keep a copy of the new configuration. */
-		app_cfg = msg->manager.data.data.cfg;
+		app_cfg = msg->module.data.data.cfg;
 
 		/* Acknowledge configuration to cloud. */
-		SEND_EVENT(app, APP_MGR_EVT_CONFIG_SEND);
+		SEND_EVENT(app, APP_EVT_CONFIG_SEND);
 
 		if (!app_cfg.act) {
 			LOG_INF("Device mode: Passive");
@@ -397,12 +397,12 @@ static void on_sub_state_active(struct app_msg_data *msg)
 /* Message handler for all states. */
 static void on_all_events(struct app_msg_data *msg)
 {
-	if (IS_EVENT(msg, util, UTIL_MGR_EVT_SHUTDOWN_REQUEST)) {
+	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {
 		k_timer_stop(&data_sample_timer);
 		k_timer_stop(&movement_timeout_timer);
 		k_timer_stop(&movement_resolution_timer);
 
-		SEND_EVENT(app, APP_MGR_EVT_SHUTDOWN_READY);
+		SEND_EVENT(app, APP_EVT_SHUTDOWN_READY);
 	}
 }
 
@@ -423,14 +423,14 @@ void main(void)
 		k_sleep(K_SECONDS(5));
 		sys_reboot(SYS_REBOOT_COLD);
 	} else {
-		SEND_EVENT(app, APP_MGR_EVT_START);
+		SEND_EVENT(app, APP_EVT_START);
 	}
 
 #if defined(CONFIG_WATCHDOG)
 	err = watchdog_init_and_start();
 	if (err) {
 		LOG_DBG("watchdog_init_and_start, error: %d", err);
-		SEND_ERROR(app, APP_MGR_EVT_ERROR, err);
+		SEND_ERROR(app, APP_EVT_ERROR, err);
 	}
 #endif
 
@@ -466,10 +466,10 @@ void main(void)
 }
 
 EVENT_LISTENER(MODULE, event_handler);
-EVENT_SUBSCRIBE_EARLY(MODULE, cloud_mgr_event);
-EVENT_SUBSCRIBE(MODULE, app_mgr_event);
-EVENT_SUBSCRIBE(MODULE, data_mgr_event);
-EVENT_SUBSCRIBE(MODULE, util_mgr_event);
-EVENT_SUBSCRIBE_FINAL(MODULE, ui_mgr_event);
-EVENT_SUBSCRIBE_FINAL(MODULE, sensor_mgr_event);
-EVENT_SUBSCRIBE_FINAL(MODULE, modem_mgr_event);
+EVENT_SUBSCRIBE_EARLY(MODULE, cloud_module_event);
+EVENT_SUBSCRIBE(MODULE, app_module_event);
+EVENT_SUBSCRIBE(MODULE, data_module_event);
+EVENT_SUBSCRIBE(MODULE, util_module_event);
+EVENT_SUBSCRIBE_FINAL(MODULE, ui_module_event);
+EVENT_SUBSCRIBE_FINAL(MODULE, sensor_module_event);
+EVENT_SUBSCRIBE_FINAL(MODULE, modem_module_event);

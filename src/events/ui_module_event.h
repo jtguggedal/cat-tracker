@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _UI_MGR_EVENT_H_
-#define _UI_MGR_EVENT_H_
+#ifndef _UI_EVENT_H_
+#define _UI_EVENT_H_
 
 /**
  * @brief UI Event
- * @defgroup ui_mgr_event UI Event
+ * @defgroup ui_module_event UI Event
  * @{
  */
 
@@ -20,17 +20,17 @@
 extern "C" {
 #endif
 
-/** @brief UI event types submitted by UI manager. */
-enum ui_mgr_event_types {
-	UI_MGR_EVT_BUTTON_DATA_READY,
-	UI_MGR_EVT_SHUTDOWN_READY,
-	UI_MGR_EVT_ERROR
+/** @brief UI event types submitted by UI module. */
+enum ui_module_event_types {
+	UI_EVT_BUTTON_DATA_READY,
+	UI_EVT_SHUTDOWN_READY,
+	UI_EVT_ERROR
 };
 
 /** @brief UI event. */
-struct ui_mgr_event {
+struct ui_module_event {
 	struct event_header header;
-	enum ui_mgr_event_types type;
+	enum ui_module_event_types type;
 
 	union {
 		struct cloud_data_ui ui;
@@ -38,7 +38,7 @@ struct ui_mgr_event {
 	} data;
 };
 
-EVENT_TYPE_DECLARE(ui_mgr_event);
+EVENT_TYPE_DECLARE(ui_module_event);
 
 #ifdef __cplusplus
 }
@@ -48,4 +48,4 @@ EVENT_TYPE_DECLARE(ui_mgr_event);
  * @}
  */
 
-#endif /* _UI_MGR_EVENT_H_ */
+#endif /* _UI_EVENT_H_ */

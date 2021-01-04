@@ -1,0 +1,23 @@
+#
+# Copyright (c) 2020 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+#
+
+menuconfig DATA_MODULE
+	bool "Data module"
+	default y
+
+if DATA_MODULE
+
+config DATA_THREAD_STACK_SIZE
+	int "Data module thread stack size"
+	default 2048
+
+rsource "../cloud/cloud_codec/Kconfig"
+
+endif # DATA_MODULE
+
+module = DATA_MODULE
+module-str = Data module
+source "subsys/logging/Kconfig.template.log_config"

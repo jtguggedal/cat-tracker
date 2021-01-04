@@ -6,7 +6,7 @@
 #define MODULE azure_iot_integration
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_CLOUD_INTEGRATION_LOG_LEVEL);
 
 #define AZURE_IOT_HUB_CLIENT_ID_LEN 15
 #define PROP_BAG_COUNT 1
@@ -175,14 +175,14 @@ int cloud_wrap_init(cloud_wrap_evt_handler_t event_handler)
 		return err;
 	}
 
-	LOG_INF("********************************************");
-	LOG_INF(" The cat tracker has started");
-	LOG_INF(" Version:     %s", log_strdup(CONFIG_CAT_TRACKER_APP_VERSION));
-	LOG_INF(" Client ID:   %s", log_strdup(client_id_buf));
-	LOG_INF(" Cloud:       %s", log_strdup("Azure IoT Hub"));
-	LOG_INF(" Endpoint:    %s",
+	LOG_DBG("********************************************");
+	LOG_DBG(" The cat tracker has started");
+	LOG_DBG(" Version:     %s", log_strdup(CONFIG_CAT_TRACKER_APP_VERSION));
+	LOG_DBG(" Client ID:   %s", log_strdup(client_id_buf));
+	LOG_DBG(" Cloud:       %s", log_strdup("Azure IoT Hub"));
+	LOG_DBG(" Endpoint:    %s",
 		log_strdup(CONFIG_AZURE_IOT_HUB_DPS_HOSTNAME));
-	LOG_INF("********************************************");
+	LOG_DBG("********************************************");
 
 	wrapper_evt_handler = event_handler;
 

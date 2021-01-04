@@ -6,7 +6,7 @@
 #define MODULE nrf_cloud_integration
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_CLOUD_INTEGRATION_LOG_LEVEL);
 
 #define NRF_CLOUD_SERVICE_INFO "{\"state\":{\"reported\":{\"device\": \
 		{\"serviceInfo\":{\"ui\":[\"GPS\",\"HUMID\",\"TEMP\"]}}}}}"
@@ -146,13 +146,13 @@ int cloud_wrap_init(cloud_wrap_evt_handler_t event_handler)
 		return err;
 	}
 
-	LOG_INF("********************************************");
-	LOG_INF(" The cat tracker has started");
-	LOG_INF(" Version:     %s", log_strdup(CONFIG_CAT_TRACKER_APP_VERSION));
-	LOG_INF(" Cloud:       %s", log_strdup("nRF Cloud"));
-	LOG_INF(" Endpoint:    %s",
+	LOG_DBG("********************************************");
+	LOG_DBG(" The cat tracker has started");
+	LOG_DBG(" Version:     %s", log_strdup(CONFIG_CAT_TRACKER_APP_VERSION));
+	LOG_DBG(" Cloud:       %s", log_strdup("nRF Cloud"));
+	LOG_DBG(" Endpoint:    %s",
 		log_strdup(CONFIG_NRF_CLOUD_HOST_NAME));
-	LOG_INF("********************************************");
+	LOG_DBG("********************************************");
 
 	wrapper_evt_handler = event_handler;
 

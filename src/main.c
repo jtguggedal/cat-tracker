@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <event_manager.h>
 
-#if defined(CONFIG_WATCHDOG)
+#if defined(CONFIG_WATCHDOG_APPLICATION)
 #include "watchdog.h"
 #endif
 
@@ -30,7 +30,7 @@
 #include <logging/log.h>
 #include <logging/log_ctrl.h>
 
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_APPLICATION_MODULE_LOG_LEVEL);
 
 /* Message structure. Events from other modules are converted to messages
  * in the event manager handler, and then queued up in the message queue
@@ -189,7 +189,8 @@ static bool event_handler(const struct event_header *eh)
 	}
 
 	if (is_sensor_module_event(eh)) {
-		struct sensor_module_event *event = cast_sensor_module_event(eh);
+		struct sensor_module_event *event =
+				cast_sensor_module_event(eh);
 		struct app_msg_data app_msg = {
 			.module.sensor = *event
 		};
@@ -408,7 +409,6 @@ static void on_all_events(struct app_msg_data *msg)
 
 void main(void)
 {
-	int err;
 	struct app_msg_data msg;
 
 	self.thread_id = k_current_get();
@@ -426,8 +426,8 @@ void main(void)
 		SEND_EVENT(app, APP_EVT_START);
 	}
 
-#if defined(CONFIG_WATCHDOG)
-	err = watchdog_init_and_start();
+#if defined(CONFIG_WATCHDOG_APPLICATION)
+	int err = watchdog_init_and_start();
 	if (err) {
 		LOG_DBG("watchdog_init_and_start, error: %d", err);
 		SEND_ERROR(app, APP_EVT_ERROR, err);

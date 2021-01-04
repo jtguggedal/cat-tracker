@@ -18,7 +18,7 @@
 #include "events/util_module_event.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_UI_MODULE_LOG_LEVEL);
 
 static struct module_data self = {
 	.name = "ui",
@@ -46,7 +46,8 @@ static void button_handler(uint32_t button_states, uint32_t has_changed)
 		LOG_DBG("2 seconds to next allowed cloud publication ");
 		LOG_DBG("triggered by button 1");
 
-		struct ui_module_event *ui_module_event = new_ui_module_event();
+		struct ui_module_event *ui_module_event =
+				new_ui_module_event();
 
 		ui_module_event->type = UI_EVT_BUTTON_DATA_READY;
 		ui_module_event->data.ui.btn = 1;

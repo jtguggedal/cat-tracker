@@ -24,7 +24,7 @@
 #include "events/util_module_event.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_DATA_MODULE_LOG_LEVEL);
 
 #define DEVICE_SETTINGS_KEY			"data_module"
 #define DEVICE_SETTINGS_CONFIG_KEY		"config"
@@ -455,7 +455,8 @@ static bool event_handler(const struct event_header *eh)
 	}
 
 	if (is_sensor_module_event(eh)) {
-		struct sensor_module_event *event = cast_sensor_module_event(eh);
+		struct sensor_module_event *event =
+				cast_sensor_module_event(eh);
 		struct data_msg_data data_msg = {
 			.module.sensor = *event
 		};
@@ -793,7 +794,7 @@ static void data_module(void)
 	}
 }
 
-K_THREAD_DEFINE(data_module_thread, CONFIG_DATATHREAD_STACK_SIZE,
+K_THREAD_DEFINE(data_module_thread, CONFIG_DATA_THREAD_STACK_SIZE,
 		data_module, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 

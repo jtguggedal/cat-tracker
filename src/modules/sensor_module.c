@@ -9,7 +9,9 @@
 #include <drivers/sensor.h>
 #include <event_manager.h>
 
+#if defined(CONFIG_EXTERNAL_SENSORS)
 #include "ext_sensors.h"
+#endif
 
 #define MODULE sensor_module
 
@@ -20,7 +22,7 @@
 #include "events/util_module_event.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(sensor_module, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(sensor_module, CONFIG_SENSOR_MODULE_LOG_LEVEL);
 
 struct sensor_msg_data {
 	union {
@@ -32,8 +34,8 @@ struct sensor_msg_data {
 
 /* Sensor module super states. */
 enum sensor_module_state {
-	SENSORSTATE_INIT,
-	SENSORSTATE_RUNNING
+	SENSOR_STATE_INIT,
+	SENSOR_STATE_RUNNING
 } sensor_state;
 
 K_MSGQ_DEFINE(msgq_sensor, sizeof(struct sensor_msg_data), 10, 4);
@@ -193,11 +195,12 @@ static bool environmental_data_requested(enum app_module_data_type *data_list,
 static void on_state_init(struct sensor_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
+#if defined(CONFIG_EXTERNAL_SENSORS)
 		int movement_threshold = msg->module.data.data.cfg.acct;
 
 		ext_sensors_mov_thres_set(movement_threshold);
-
-		sensor_state = SENSORSTATE_RUNNING;
+#endif
+		sensor_state = SENSOR_STATE_RUNNING;
 	}
 }
 
@@ -205,9 +208,11 @@ static void on_state_running(struct sensor_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
 
+#if defined(CONFIG_EXTERNAL_SENSORS)
 		int movement_threshold = msg->module.data.data.cfg.acct;
 
 		ext_sensors_mov_thres_set(movement_threshold);
+#endif
 	}
 
 	if (IS_EVENT(msg, app, APP_EVT_DATA_GET)) {
@@ -254,10 +259,10 @@ static void sensor_module(void)
 		module_get_next_msg(&self, &msg);
 
 		switch (sensor_state) {
-		case SENSORSTATE_INIT:
+		case SENSOR_STATE_INIT:
 			on_state_init(&msg);
 			break;
-		case SENSORSTATE_RUNNING:
+		case SENSOR_STATE_RUNNING:
 			on_state_running(&msg);
 			break;
 		default:
@@ -269,7 +274,7 @@ static void sensor_module(void)
 	}
 }
 
-K_THREAD_DEFINE(sensor_module_thread, CONFIG_SENSORTHREAD_STACK_SIZE,
+K_THREAD_DEFINE(sensor_module_thread, CONFIG_SENSOR_THREAD_STACK_SIZE,
 		sensor_module, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 

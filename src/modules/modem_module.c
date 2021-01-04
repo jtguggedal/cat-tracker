@@ -22,7 +22,7 @@
 #include "events/cloud_module_event.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_MODEM_MODULE_LOG_LEVEL);
 
 BUILD_ASSERT(!IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT),
 		"The Modem module does not support this configuration");
@@ -251,7 +251,8 @@ static int modem_data_get(void)
 
 	check_modem_fw_version();
 
-	struct modem_module_event *modem_module_event = new_modem_module_event();
+	struct modem_module_event *modem_module_event =
+			new_modem_module_event();
 
 	modem_module_event->data.modem.rsrp = rsrp_value_latest;
 	modem_module_event->data.modem.ip =
@@ -259,17 +260,20 @@ static int modem_data_get(void)
 	modem_module_event->data.modem.cell = modem_param.network.cellid_dec;
 	modem_module_event->data.modem.mccmnc =
 		modem_param.network.current_operator.value_string;
-	modem_module_event->data.modem.area = modem_param.network.area_code.value;
+	modem_module_event->data.modem.area =
+			modem_param.network.area_code.value;
 	modem_module_event->data.modem.appv = CONFIG_CAT_TRACKER_APP_VERSION;
 	modem_module_event->data.modem.brdv = modem_param.device.board;
 	modem_module_event->data.modem.fw =
 		modem_param.device.modem_fw.value_string;
-	modem_module_event->data.modem.iccid = modem_param.sim.iccid.value_string;
+	modem_module_event->data.modem.iccid =
+			modem_param.sim.iccid.value_string;
 	modem_module_event->data.modem.nw_lte_m =
 		modem_param.network.lte_mode.value;
 	modem_module_event->data.modem.nw_nb_iot =
 		modem_param.network.nbiot_mode.value;
-	modem_module_event->data.modem.nw_gps = modem_param.network.gps_mode.value;
+	modem_module_event->data.modem.nw_gps =
+			modem_param.network.gps_mode.value;
 	modem_module_event->data.modem.bnd =
 		modem_param.network.current_band.value;
 	modem_module_event->data.modem.mod_ts = k_uptime_get();
@@ -319,7 +323,8 @@ static int battery_data_get(void)
 		return err;
 	}
 
-	struct modem_module_event *modem_module_event = new_modem_module_event();
+	struct modem_module_event *modem_module_event =
+			new_modem_module_event();
 
 	modem_module_event->data.bat.bat = modem_param.device.battery.value;
 	modem_module_event->data.bat.bat_ts = k_uptime_get();
@@ -431,7 +436,7 @@ static int modem_setup(void)
 		return err;
 	}
 
-	if (IS_ENABLED(CONFIG_MODEMAUTO_REQUEST_POWER_SAVING_FEATURES)) {
+	if (IS_ENABLED(CONFIG_MODEM_AUTO_REQUEST_POWER_SAVING_FEATURES)) {
 		err = modem_configure_low_power();
 		if (err) {
 			LOG_ERR("modem_configure_low_power, error: %d", err);

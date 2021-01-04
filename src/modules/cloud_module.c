@@ -25,7 +25,7 @@
 #include "events/gps_module_event.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_CLOUD_MODULE_LOG_LEVEL);
 
 BUILD_ASSERT(CONFIG_CLOUD_CONNECT_RETRIES < 14,
 	    "Cloud connect retries too large");
@@ -49,13 +49,13 @@ struct cloud_backoff_delay_lookup {
 
 /* Cloud module super-states. */
 static enum cloud_module_state_type {
-	CLOUDSTATE_LTE_DISCONNECTED,
-	CLOUDSTATE_LTE_CONNECTED
+	CLOUD_STATE_LTE_DISCONNECTED,
+	CLOUD_STATE_LTE_CONNECTED
 } cloud_state;
 
 static enum cloud_module_sub_state_type {
-	CLOUDSUB_STATE_CLOUD_DISCONNECTED,
-	CLOUDSUB_STATE_CLOUD_CONNECTED
+	CLOUD_SUB_STATE_CLOUD_DISCONNECTED,
+	CLOUD_SUB_STATE_CLOUD_CONNECTED
 } cloud_sub_state;
 
 /* Lookup table for backoff reconnection to cloud. Binary scaling. */
@@ -95,7 +95,8 @@ static void sub_state_set(enum cloud_module_sub_state_type new_state)
 
 static void send_data_ack(void *ptr)
 {
-	struct cloud_module_event *cloud_module_event = new_cloud_module_event();
+	struct cloud_module_event *cloud_module_event =
+			new_cloud_module_event();
 
 	cloud_module_event->type = CLOUD_EVT_DATA_ACK;
 	cloud_module_event->data.ptr = ptr;
@@ -105,7 +106,8 @@ static void send_data_ack(void *ptr)
 
 static void send_config_received(void)
 {
-	struct cloud_module_event *cloud_module_event = new_cloud_module_event();
+	struct cloud_module_event *cloud_module_event =
+			new_cloud_module_event();
 
 	cloud_module_event->type = CLOUD_EVT_CONFIG_RECEIVED;
 	cloud_module_event->data.config = copy_cfg;
@@ -296,8 +298,8 @@ static bool event_handler(const struct event_header *eh)
 static void on_state_lte_connected(struct cloud_msg_data *cloud_msg)
 {
 	if (IS_EVENT(cloud_msg, modem, MODEM_EVT_LTE_DISCONNECTED)) {
-		state_set(CLOUDSTATE_LTE_DISCONNECTED);
-		sub_state_set(CLOUDSUB_STATE_CLOUD_DISCONNECTED);
+		state_set(CLOUD_STATE_LTE_DISCONNECTED);
+		sub_state_set(CLOUD_SUB_STATE_CLOUD_DISCONNECTED);
 
 		connect_retries = 0;
 
@@ -322,7 +324,7 @@ static void on_state_lte_connected(struct cloud_msg_data *cloud_msg)
 static void on_state_lte_disconnected(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTED)) {
-		state_set(CLOUDSTATE_LTE_CONNECTED);
+		state_set(CLOUD_STATE_LTE_CONNECTED);
 
 		/* LTE is now connected, cloud connection can be attempted */
 		connect_cloud();
@@ -332,7 +334,7 @@ static void on_state_lte_disconnected(struct cloud_msg_data *msg)
 static void on_sub_state_cloud_connected(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_DISCONNECTED)) {
-		sub_state_set(CLOUDSUB_STATE_CLOUD_DISCONNECTED);
+		sub_state_set(CLOUD_SUB_STATE_CLOUD_DISCONNECTED);
 
 		k_delayed_work_submit(&connect_check_work, K_NO_WAIT);
 
@@ -377,7 +379,7 @@ static void on_sub_state_cloud_connected(struct cloud_msg_data *msg)
 static void on_sub_state_cloud_disconnected(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_CONNECTED)) {
-		sub_state_set(CLOUDSUB_STATE_CLOUD_CONNECTED);
+		sub_state_set(CLOUD_SUB_STATE_CLOUD_CONNECTED);
 
 		connect_retries = 0;
 		k_delayed_work_cancel(&connect_check_work);
@@ -508,8 +510,8 @@ static void cloud_module(void)
 
 	module_start(&self);
 
-	state_set(CLOUDSTATE_LTE_DISCONNECTED);
-	sub_state_set(CLOUDSUB_STATE_CLOUD_DISCONNECTED);
+	state_set(CLOUD_STATE_LTE_DISCONNECTED);
+	sub_state_set(CLOUD_SUB_STATE_CLOUD_DISCONNECTED);
 
 	k_delayed_work_init(&connect_check_work, connect_check_work_fn);
 
@@ -523,12 +525,12 @@ static void cloud_module(void)
 		module_get_next_msg(&self, &cloud_msg);
 
 		switch (cloud_state) {
-		case CLOUDSTATE_LTE_CONNECTED:
+		case CLOUD_STATE_LTE_CONNECTED:
 			switch (cloud_sub_state) {
-			case CLOUDSUB_STATE_CLOUD_CONNECTED:
+			case CLOUD_SUB_STATE_CLOUD_CONNECTED:
 				on_sub_state_cloud_connected(&cloud_msg);
 				break;
-			case CLOUDSUB_STATE_CLOUD_DISCONNECTED:
+			case CLOUD_SUB_STATE_CLOUD_DISCONNECTED:
 				on_sub_state_cloud_disconnected(&cloud_msg);
 				break;
 			default:
@@ -538,7 +540,7 @@ static void cloud_module(void)
 
 			on_state_lte_connected(&cloud_msg);
 			break;
-		case CLOUDSTATE_LTE_DISCONNECTED:
+		case CLOUD_STATE_LTE_DISCONNECTED:
 			on_state_lte_disconnected(&cloud_msg);
 			break;
 		default:
@@ -550,7 +552,7 @@ static void cloud_module(void)
 	}
 }
 
-K_THREAD_DEFINE(cloud_module_thread, CONFIG_CLOUDTHREAD_STACK_SIZE,
+K_THREAD_DEFINE(cloud_module_thread, CONFIG_CLOUD_THREAD_STACK_SIZE,
 		cloud_module, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 

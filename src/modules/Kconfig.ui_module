@@ -1,0 +1,17 @@
+#
+# Copyright (c) 2020 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+#
+
+menuconfig UI_MODULE
+	bool "User Interface module"
+	default y
+
+if UI_MODULE
+
+endif # UI_MODULE
+
+module = UI_MODULE
+module-str = User Interface module
+source "subsys/logging/Kconfig.template.log_config"

@@ -4,11 +4,10 @@
 # SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
 #
 
-menu "External sensors"
+menuconfig EXTERNAL_SENSORS
+	bool "External sensors"
 
-config EXTERNAL_SENSORS
-	bool "Enable external sensors"
-	default y if BOARD_THINGY91_NRF9160NS || BOARD_NRF9160_PCA10015NS
+if EXTERNAL_SENSORS
 
 config ACCELEROMETER_DEV_NAME
 	string "Accelerometer device name"
@@ -16,7 +15,8 @@ config ACCELEROMETER_DEV_NAME
 config MULTISENSOR_DEV_NAME
 	string "Multisensor device name"
 
-config ACCELEROMETER_TRIGGER
-	bool "Accelerometer trigger"
+endif # EXTERNAL_SENSORS
 
-endmenu # External sensors
+module = EXTERNAL_SENSORS
+module-str = External sensors
+source "subsys/logging/Kconfig.template.log_config"

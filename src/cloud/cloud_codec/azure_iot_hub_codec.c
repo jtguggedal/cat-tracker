@@ -17,7 +17,7 @@
 #include <date_time.h>
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(cloud_codec, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(cloud_codec, CONFIG_CLOUD_CODEC_LOG_LEVEL);
 
 #define MODEM_CURRENT_BAND	"band"
 #define MODEM_NETWORK_MODE	"nw"
@@ -428,7 +428,7 @@ int cloud_codec_decode_config(char *input, struct cloud_data_cfg *data)
 		return -ENOENT;
 	}
 
-	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+	if (IS_ENABLED(CONFIG_CLOUD_CODEC_LOG_LEVEL_DBG)) {
 		json_print_obj("Decoded message:\n", root_obj);
 	}
 
@@ -518,7 +518,7 @@ int cloud_codec_encode_config(struct cloud_codec_data *output,
 
 	buffer = cJSON_PrintUnformatted(root_obj);
 
-	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+	if (IS_ENABLED(CONFIG_CLOUD_CODEC_LOG_LEVEL_DBG)) {
 		json_print_obj("Encoded message:\n", root_obj);
 	}
 
@@ -596,7 +596,7 @@ int cloud_codec_encode_data(struct cloud_codec_data *output,
 
 	buffer = cJSON_PrintUnformatted(root_obj);
 
-	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+	if (IS_ENABLED(CONFIG_CLOUD_CODEC_LOG_LEVEL_DBG)) {
 		json_print_obj("Encoded message:\n", root_obj);
 	}
 
@@ -634,7 +634,7 @@ int cloud_codec_encode_ui_data(struct cloud_codec_data *output,
 
 	buffer = cJSON_PrintUnformatted(root_obj);
 
-	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+	if (IS_ENABLED(CONFIG_CLOUD_CODEC_LOG_LEVEL_DBG)) {
 		json_print_obj("Encoded message:\n", root_obj);
 	}
 
@@ -785,7 +785,7 @@ int cloud_codec_encode_batch_data(struct cloud_codec_data *output,
 
 	buffer = cJSON_PrintUnformatted(root_obj);
 
-	if (IS_ENABLED(CONFIG_CAT_TRACKER_LOG_LEVEL_DBG)) {
+	if (IS_ENABLED(CONFIG_CLOUD_CODEC_LOG_LEVEL_DBG)) {
 		json_print_obj("Encoded message:\n", root_obj);
 	}
 

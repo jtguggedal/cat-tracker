@@ -34,7 +34,7 @@ static int log_cloud_module_event(const struct event_header *eh, char *buf,
 		strcpy(event_name, "CLOUD_EVT_DATA_ACK");
 		break;
 	case CLOUD_EVT_SHUTDOWN_READY:
-		strcpy(event_name, "CLOUDSHUTDOWN_READY");
+		strcpy(event_name, "CLOUD_EVT_SHUTDOWN_READY");
 		break;
 	case CLOUD_EVT_ERROR:
 		strcpy(event_name, "CLOUD_EVT_ERROR");

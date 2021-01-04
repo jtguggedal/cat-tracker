@@ -22,7 +22,7 @@
 #include "events/output_module_event.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_UTIL_MODULE_LOG_LEVEL);
 
 static struct module_data self = {
 	.name = "util",
@@ -83,7 +83,8 @@ static void send_reboot_request(void)
 	static bool error_signaled;
 
 	if (!error_signaled) {
-		struct util_module_event *util_module_event = new_util_module_event();
+		struct util_module_event *util_module_event =
+				new_util_module_event();
 
 		util_module_event->type = UTIL_EVT_SHUTDOWN_REQUEST;
 
@@ -139,7 +140,8 @@ static bool event_handler(const struct event_header *eh)
 	}
 
 	if (is_sensor_module_event(eh)) {
-		struct sensor_module_event *event = cast_sensor_module_event(eh);
+		struct sensor_module_event *event =
+				cast_sensor_module_event(eh);
 		struct util_msg_data util_msg = {
 			.module.sensor = *event
 		};
@@ -175,7 +177,8 @@ static bool event_handler(const struct event_header *eh)
 	}
 
 	if (is_output_module_event(eh)) {
-		struct output_module_event *event = cast_output_module_event(eh);
+		struct output_module_event *event =
+				cast_output_module_event(eh);
 		struct util_msg_data util_msg = {
 			.module.output = *event
 		};

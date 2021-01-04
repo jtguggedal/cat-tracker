@@ -42,13 +42,13 @@ struct gps_msg_data {
 
 /* GPS module super states. */
 static enum gps_module_state_type {
-	GPSSTATE_INIT,
-	GPSSTATE_RUNNING
+	GPS_STATE_INIT,
+	GPS_STATE_RUNNING
 } gps_state;
 
 static enum gps_module_sub_state_type {
-	GPSSUB_STATE_IDLE,
-	GPSSUB_STATE_SEARCH
+	GPS_SUB_STATE_IDLE,
+	GPS_SUB_STATE_SEARCH
 } gps_sub_state;
 
 static void message_handler(struct gps_msg_data *data);
@@ -267,7 +267,7 @@ static void on_state_init(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
 		gps_cfg.timeout = msg->module.data.data.cfg.gpst;
-		state_set(GPSSTATE_RUNNING);
+		state_set(GPS_STATE_RUNNING);
 	}
 }
 
@@ -281,7 +281,7 @@ static void on_state_running(struct gps_msg_data *msg)
 static void on_state_running_gps_search(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_INACTIVE)) {
-		sub_state_set(GPSSUB_STATE_IDLE);
+		sub_state_set(GPS_SUB_STATE_IDLE);
 	}
 
 	if (IS_EVENT(msg, app, APP_EVT_DATA_GET)) {
@@ -299,7 +299,7 @@ static void on_state_running_gps_search(struct gps_msg_data *msg)
 static void on_state_running_gps_idle(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_ACTIVE)) {
-		sub_state_set(GPSSUB_STATE_SEARCH);
+		sub_state_set(GPS_SUB_STATE_SEARCH);
 	}
 
 	if (IS_EVENT(msg, app, APP_EVT_DATA_GET)) {
@@ -317,7 +317,7 @@ static void on_all_states(struct gps_msg_data *msg)
 	if (IS_EVENT(msg, app, APP_EVT_START)) {
 		int err;
 
-		state_set(GPSSTATE_INIT);
+		state_set(GPS_STATE_INIT);
 		module_start(&self);
 
 		err = setup();
@@ -335,15 +335,15 @@ static void on_all_states(struct gps_msg_data *msg)
 static void message_handler(struct gps_msg_data *msg)
 {
 	switch (gps_state) {
-	case GPSSTATE_INIT:
+	case GPS_STATE_INIT:
 		on_state_init(msg);
 		break;
-	case GPSSTATE_RUNNING:
+	case GPS_STATE_RUNNING:
 		switch (gps_sub_state) {
-		case GPSSUB_STATE_SEARCH:
+		case GPS_SUB_STATE_SEARCH:
 			on_state_running_gps_search(msg);
 			break;
-		case GPSSUB_STATE_IDLE:
+		case GPS_SUB_STATE_IDLE:
 			on_state_running_gps_idle(msg);
 			break;
 		default:

@@ -5,4 +5,5 @@
 #
 
 zephyr_include_directories(.)
-target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ext_sensors.c)
+target_sources_ifdef(CONFIG_EXTERNAL_SENSORS app PRIVATE
+                        ${CMAKE_CURRENT_SOURCE_DIR}/ext_sensors.c)

@@ -6,7 +6,7 @@
 #include <stdlib.h>
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(ext_sensors, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(ext_sensors, CONFIG_EXTERNAL_SENSORS_LOG_LEVEL);
 
 struct env_sensor {
 	enum sensor_channel channel;
@@ -100,16 +100,14 @@ int ext_sensors_init(ext_sensor_handler_t handler)
 		return -ENODATA;
 	}
 
-	if (IS_ENABLED(CONFIG_ACCELEROMETER_TRIGGER)) {
-		struct sensor_trigger trig = { .chan = SENSOR_CHAN_ACCEL_XYZ };
+	struct sensor_trigger trig = { .chan = SENSOR_CHAN_ACCEL_XYZ };
 
-		trig.type = SENSOR_TRIG_THRESHOLD;
-		if (sensor_trigger_set(accel_sensor.dev, &trig,
-				       accelerometer_trigger_handler)) {
-			LOG_ERR("Could not set trigger for device %s",
-				accel_sensor.dev_name);
-			return -ENODATA;
-		}
+	trig.type = SENSOR_TRIG_THRESHOLD;
+	if (sensor_trigger_set(accel_sensor.dev, &trig,
+			       accelerometer_trigger_handler)) {
+		LOG_ERR("Could not set trigger for device %s",
+			accel_sensor.dev_name);
+		return -ENODATA;
 	}
 
 	m_evt_handler = handler;

@@ -22,7 +22,7 @@
 #include "events/modem_module_event.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_OUTPUT_MODULE_LOG_LEVEL);
 
 static struct module_data self = {
 	.name = "output",
@@ -40,21 +40,21 @@ struct output_msg_data {
 
 /* Output module super states. */
 enum output_module_states {
-	OUTPUTSTATE_INIT,
-	OUTPUTSTATE_RUNNING,
-	OUTPUTSTATE_ERROR
+	OUTPUT_STATE_INIT,
+	OUTPUT_STATE_RUNNING,
+	OUTPUT_STATE_ERROR
 } output_state;
 
 /* Output module sub states. */
 enum output_module_sub_states {
-	OUTPUTSUB_STATE_ACTIVE,
-	OUTPUTSUB_STATE_PASSIVE
+	OUTPUT_SUB_STATE_ACTIVE,
+	OUTPUT_SUB_STATE_PASSIVE
 } output_sub_state;
 
 /* Output module sub-sub states. */
 enum output_module_sub_sub_states {
-	OUTPUTSUB_SUB_STATE_GPS_INACTIVE,
-	OUTPUTSUB_SUB_STATE_GPS_ACTIVE
+	OUTPUT_SUB_SUB_STATE_GPS_INACTIVE,
+	OUTPUT_SUB_SUB_STATE_GPS_ACTIVE
 } output_sub_sub_state;
 
 /* Delayed works that is used to make sure the device always reverts back to the
@@ -150,10 +150,10 @@ static void on_state_init(struct output_msg_data *output_msg)
 {
 	if (is_data_module_event(&output_msg->module.data.header) &&
 	    output_msg->module.data.type == DATA_EVT_CONFIG_INIT) {
-		output_state = OUTPUTSTATE_RUNNING;
+		output_state = OUTPUT_STATE_RUNNING;
 		output_sub_state = output_msg->module.data.data.cfg.act ?
-						OUTPUTSUB_STATE_ACTIVE :
-						OUTPUTSUB_STATE_PASSIVE;
+						OUTPUT_SUB_STATE_ACTIVE :
+						OUTPUT_SUB_STATE_PASSIVE;
 	}
 }
 
@@ -164,7 +164,7 @@ static void on_active_gps_active(struct output_msg_data *output_msg)
 		case GPS_EVT_INACTIVE:
 			ui_led_set_pattern(UI_LED_ACTIVE_MODE);
 			output_sub_sub_state =
-					OUTPUTSUB_SUB_STATE_GPS_INACTIVE;
+					OUTPUT_SUB_SUB_STATE_GPS_INACTIVE;
 			break;
 		default:
 			break;
@@ -192,7 +192,7 @@ static void on_active_gps_inactive(struct output_msg_data *output_msg)
 		case GPS_EVT_ACTIVE:
 			ui_led_set_pattern(UI_LED_GPS_SEARCHING);
 			output_sub_sub_state =
-					OUTPUTSUB_SUB_STATE_GPS_ACTIVE;
+					OUTPUT_SUB_SUB_STATE_GPS_ACTIVE;
 			break;
 		default:
 			break;
@@ -221,7 +221,7 @@ static void on_passive_gps_active(struct output_msg_data *output_msg)
 		case GPS_EVT_INACTIVE:
 			ui_led_set_pattern(UI_LED_PASSIVE_MODE);
 			output_sub_sub_state =
-					OUTPUTSUB_SUB_STATE_GPS_INACTIVE;
+					OUTPUT_SUB_SUB_STATE_GPS_INACTIVE;
 			break;
 		default:
 			break;
@@ -249,7 +249,7 @@ static void on_passive_gps_inactive(struct output_msg_data *output_msg)
 		case GPS_EVT_ACTIVE:
 			ui_led_set_pattern(UI_LED_GPS_SEARCHING);
 			output_sub_sub_state =
-					OUTPUTSUB_SUB_STATE_GPS_ACTIVE;
+					OUTPUT_SUB_SUB_STATE_GPS_ACTIVE;
 			break;
 		default:
 			break;
@@ -277,7 +277,7 @@ static void on_sub_state_active(struct output_msg_data *output_msg)
 		switch (output_msg->module.data.type) {
 		case DATA_EVT_CONFIG_READY:
 			if (!output_msg->module.data.data.cfg.act) {
-				output_sub_state = OUTPUTSUB_STATE_PASSIVE;
+				output_sub_state = OUTPUT_SUB_STATE_PASSIVE;
 			}
 			break;
 		default:
@@ -290,7 +290,7 @@ static void on_sub_state_passive(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
 		if (msg->module.data.data.cfg.act) {
-			output_sub_state = OUTPUTSUB_STATE_ACTIVE;
+			output_sub_state = OUTPUT_SUB_STATE_ACTIVE;
 		}
 	}
 }
@@ -325,7 +325,7 @@ static void on_all_states(struct output_msg_data *msg)
 	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {
 		ui_led_set_pattern(UI_LED_ERROR_SYSTEM_FAULT);
 
-		output_state = OUTPUTSTATE_ERROR;
+		output_state = OUTPUT_STATE_ERROR;
 
 		SEND_EVENT(output, OUTPUT_EVT_SHUTDOWN_READY);
 	}
@@ -334,17 +334,17 @@ static void on_all_states(struct output_msg_data *msg)
 static void message_handler(struct output_msg_data *msg)
 {
 	switch (output_state) {
-	case OUTPUTSTATE_INIT:
+	case OUTPUT_STATE_INIT:
 		on_state_init(msg);
 		break;
-	case OUTPUTSTATE_RUNNING:
+	case OUTPUT_STATE_RUNNING:
 		switch (output_sub_state) {
-		case OUTPUTSUB_STATE_ACTIVE:
+		case OUTPUT_SUB_STATE_ACTIVE:
 			switch (output_sub_sub_state) {
-			case OUTPUTSUB_SUB_STATE_GPS_ACTIVE:
+			case OUTPUT_SUB_SUB_STATE_GPS_ACTIVE:
 				on_active_gps_active(msg);
 				break;
-			case OUTPUTSUB_SUB_STATE_GPS_INACTIVE:
+			case OUTPUT_SUB_SUB_STATE_GPS_INACTIVE:
 				on_active_gps_inactive(msg);
 				break;
 			default:
@@ -353,12 +353,12 @@ static void message_handler(struct output_msg_data *msg)
 
 			on_sub_state_active(msg);
 			break;
-		case OUTPUTSUB_STATE_PASSIVE:
+		case OUTPUT_SUB_STATE_PASSIVE:
 			switch (output_sub_sub_state) {
-			case OUTPUTSUB_SUB_STATE_GPS_ACTIVE:
+			case OUTPUT_SUB_SUB_STATE_GPS_ACTIVE:
 				on_passive_gps_active(msg);
 				break;
-			case OUTPUTSUB_SUB_STATE_GPS_INACTIVE:
+			case OUTPUT_SUB_SUB_STATE_GPS_INACTIVE:
 				on_passive_gps_inactive(msg);
 				break;
 			default:
@@ -373,7 +373,7 @@ static void message_handler(struct output_msg_data *msg)
 		}
 		on_state_running(msg);
 		break;
-	case OUTPUTSTATE_ERROR:
+	case OUTPUT_STATE_ERROR:
 		/* The error state has no transition. */
 		break;
 	default:

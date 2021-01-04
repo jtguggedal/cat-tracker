@@ -5,7 +5,7 @@
 #include <math.h>
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(cloud_codec_ringbuffer, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(cloud_codec_ringbuffer, CONFIG_CLOUD_CODEC_LOG_LEVEL);
 
 #define ACCELEROMETER_TOTAL_AXIS 3
 

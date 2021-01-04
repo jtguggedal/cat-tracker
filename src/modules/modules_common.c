@@ -10,7 +10,7 @@
 
 #include <logging/log.h>
 
-LOG_MODULE_REGISTER(modules_common, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(modules_common, CONFIG_APPLICATION_MODULE_LOG_LEVEL);
 
 static atomic_t active_module_count;
 

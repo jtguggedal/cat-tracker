@@ -1,0 +1,24 @@
+#
+# Copyright (c) 2020 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+#
+
+menuconfig OUTPUT_MODULE
+	bool "Output module"
+	select USE_UI_MODULE
+	default y
+
+if OUTPUT_MODULE
+
+config OUTPUT_THREAD_STACK_SIZE
+	int "Output module thread stack size"
+	default 512
+
+rsource "../ui/Kconfig"
+
+endif # OUTPUT_MODULE
+
+module = OUTPUT_MODULE
+module-str = Output module
+source "subsys/logging/Kconfig.template.log_config"

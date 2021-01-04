@@ -4,7 +4,7 @@
 #include "cJSON_os.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(cloud_codec_utils, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(cloud_codec_utils, CONFIG_CLOUD_CODEC_LOG_LEVEL);
 
 int json_add_obj(cJSON *parent, const char *str, cJSON *item)
 {

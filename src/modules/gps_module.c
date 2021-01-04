@@ -20,7 +20,7 @@
 #include "events/util_module_event.h"
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(MODULE, CONFIG_CAT_TRACKER_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_GPS_MODULE_LOG_LEVEL);
 
 /* Maximum GPS interval value. Dummy value, will not be used. Starting
  * and stopping of GPS is done by the application.
@@ -176,7 +176,8 @@ static void gps_event_handler(const struct device *dev, struct gps_event *evt)
 		break;
 	case GPS_EVT_AGPS_DATA_NEEDED:
 		LOG_DBG("GPS_EVT_AGPS_DATA_NEEDED");
-		struct gps_module_event *gps_module_event = new_gps_module_event();
+		struct gps_module_event *gps_module_event =
+				new_gps_module_event();
 
 		gps_module_event->data.agps_request = evt->agps_request;
 		gps_module_event->type = GPS_EVT_AGPS_NEEDED;

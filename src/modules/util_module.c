@@ -29,24 +29,24 @@ static struct module_data self = {
 };
 
 /* Util module states. */
-static enum util_module_state_type {
-	UTIL_STATE_INIT,
-	UTIL_STATE_REBOOT_PENDING
+static enum state_type {
+	STATE_INIT,
+	STATE_REBOOT_PENDING
 } state;
 
-static char *state2str(enum util_module_state_type state)
+static char *state2str(enum state_type new_state)
 {
-	switch (state) {
-	case UTIL_STATE_INIT:
-		return "UTIL_STATE_INIT";
-	case UTIL_STATE_REBOOT_PENDING:
-		return "UTIL_STATE_REBOOT_PENDING";
+	switch (new_state) {
+	case STATE_INIT:
+		return "STATE_INIT";
+	case STATE_REBOOT_PENDING:
+		return "STATE_REBOOT_PENDING";
 	default:
 		return "Unknown";
 	}
 }
 
-static void state_set(enum util_module_state_type new_state)
+static void state_set(enum state_type new_state)
 {
 	if (new_state == state) {
 		LOG_DBG("State: %s", log_strdup(state2str(state)));
@@ -332,7 +332,7 @@ static void message_handler(struct util_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_EVT_START)) {
 		module_start(&self);
-		state_set(UTIL_STATE_INIT);
+		state_set(STATE_INIT);
 		k_delayed_work_init(&reboot_work, reboot_work_fn);
 	}
 

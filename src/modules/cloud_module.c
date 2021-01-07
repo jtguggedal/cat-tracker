@@ -48,14 +48,14 @@ struct cloud_backoff_delay_lookup {
 };
 
 /* Cloud module super-states. */
-static enum cloud_module_state_type {
-	CLOUD_STATE_LTE_DISCONNECTED,
-	CLOUD_STATE_LTE_CONNECTED
+static enum state_type {
+	STATE_LTE_DISCONNECTED,
+	STATE_LTE_CONNECTED
 } state;
 
-static enum cloud_module_sub_state_type {
-	CLOUD_SUB_STATE_CLOUD_DISCONNECTED,
-	CLOUD_SUB_STATE_CLOUD_CONNECTED
+static enum sub_state_type {
+	SUB_STATE_CLOUD_DISCONNECTED,
+	SUB_STATE_CLOUD_CONNECTED
 } sub_state;
 
 /* Lookup table for backoff reconnection to cloud. Binary scaling. */
@@ -83,31 +83,31 @@ static struct module_data self = {
 
 static void connect_check_work_fn(struct k_work *work);
 
-static char *state2str(enum cloud_module_state_type state)
+static char *state2str(enum state_type state)
 {
 	switch (state) {
-	case CLOUD_STATE_LTE_DISCONNECTED:
-		return "CLOUD_STATE_LTE_DISCONNECTED";
-	case CLOUD_STATE_LTE_CONNECTED:
-		return "CLOUD_STATE_LTE_CONNECTED";
+	case STATE_LTE_DISCONNECTED:
+		return "STATE_LTE_DISCONNECTED";
+	case STATE_LTE_CONNECTED:
+		return "STATE_LTE_CONNECTED";
 	default:
 		return "Unknown";
 	}
 }
 
-static char *sub_state2str(enum cloud_module_sub_state_type state)
+static char *sub_state2str(enum sub_state_type new_state)
 {
-	switch (state) {
-	case CLOUD_SUB_STATE_CLOUD_DISCONNECTED:
-		return "CLOUD_SUB_STATE_CLOUD_DISCONNECTED";
-	case CLOUD_SUB_STATE_CLOUD_CONNECTED:
-		return "CLOUD_SUB_STATE_CLOUD_CONNECTED";
+	switch (new_state) {
+	case SUB_STATE_CLOUD_DISCONNECTED:
+		return "SUB_STATE_CLOUD_DISCONNECTED";
+	case SUB_STATE_CLOUD_CONNECTED:
+		return "SUB_STATE_CLOUD_CONNECTED";
 	default:
 		return "Unknown";
 	}
 }
 
-static void state_set(enum cloud_module_sub_state_type new_state)
+static void state_set(enum state_type new_state)
 {
 	if (new_state == state) {
 		LOG_DBG("State: %s", log_strdup(state2str(state)));
@@ -121,15 +121,15 @@ static void state_set(enum cloud_module_sub_state_type new_state)
 	state = new_state;
 }
 
-static void sub_state_set(enum cloud_module_sub_state_type new_state)
+static void sub_state_set(enum sub_state_type new_state)
 {
-	if (new_state == state) {
-		LOG_DBG("State: %s", log_strdup(sub_state2str(state)));
+	if (new_state == sub_state) {
+		LOG_DBG("Sub state: %s", log_strdup(sub_state2str(sub_state)));
 		return;
 	}
 
-	LOG_DBG("State transition %s --> %s",
-		log_strdup(sub_state2str(state)),
+	LOG_DBG("Sub state transition %s --> %s",
+		log_strdup(sub_state2str(sub_state)),
 		log_strdup(sub_state2str(new_state)));
 
 	sub_state = new_state;
@@ -340,8 +340,8 @@ static bool event_handler(const struct event_header *eh)
 static void on_state_lte_connected(struct cloud_msg_data *cloud_msg)
 {
 	if (IS_EVENT(cloud_msg, modem, MODEM_EVT_LTE_DISCONNECTED)) {
-		state_set(CLOUD_STATE_LTE_DISCONNECTED);
-		sub_state_set(CLOUD_SUB_STATE_CLOUD_DISCONNECTED);
+		state_set(STATE_LTE_DISCONNECTED);
+		sub_state_set(SUB_STATE_CLOUD_DISCONNECTED);
 
 		connect_retries = 0;
 
@@ -366,7 +366,7 @@ static void on_state_lte_connected(struct cloud_msg_data *cloud_msg)
 static void on_state_lte_disconnected(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTED)) {
-		state_set(CLOUD_STATE_LTE_CONNECTED);
+		state_set(STATE_LTE_CONNECTED);
 
 		/* LTE is now connected, cloud connection can be attempted */
 		connect_cloud();
@@ -376,7 +376,7 @@ static void on_state_lte_disconnected(struct cloud_msg_data *msg)
 static void on_sub_state_cloud_connected(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_DISCONNECTED)) {
-		sub_state_set(CLOUD_SUB_STATE_CLOUD_DISCONNECTED);
+		sub_state_set(SUB_STATE_CLOUD_DISCONNECTED);
 
 		k_delayed_work_submit(&connect_check_work, K_NO_WAIT);
 
@@ -421,7 +421,7 @@ static void on_sub_state_cloud_connected(struct cloud_msg_data *msg)
 static void on_sub_state_cloud_disconnected(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_CONNECTED)) {
-		sub_state_set(CLOUD_SUB_STATE_CLOUD_CONNECTED);
+		sub_state_set(SUB_STATE_CLOUD_CONNECTED);
 
 		connect_retries = 0;
 		k_delayed_work_cancel(&connect_check_work);
@@ -552,8 +552,8 @@ static void cloud_module(void)
 
 	module_start(&self);
 
-	state_set(CLOUD_STATE_LTE_DISCONNECTED);
-	sub_state_set(CLOUD_SUB_STATE_CLOUD_DISCONNECTED);
+	state_set(STATE_LTE_DISCONNECTED);
+	sub_state_set(SUB_STATE_CLOUD_DISCONNECTED);
 
 	k_delayed_work_init(&connect_check_work, connect_check_work_fn);
 
@@ -567,12 +567,12 @@ static void cloud_module(void)
 		module_get_next_msg(&self, &cloud_msg);
 
 		switch (state) {
-		case CLOUD_STATE_LTE_CONNECTED:
+		case STATE_LTE_CONNECTED:
 			switch (sub_state) {
-			case CLOUD_SUB_STATE_CLOUD_CONNECTED:
+			case SUB_STATE_CLOUD_CONNECTED:
 				on_sub_state_cloud_connected(&cloud_msg);
 				break;
-			case CLOUD_SUB_STATE_CLOUD_DISCONNECTED:
+			case SUB_STATE_CLOUD_DISCONNECTED:
 				on_sub_state_cloud_disconnected(&cloud_msg);
 				break;
 			default:
@@ -582,7 +582,7 @@ static void cloud_module(void)
 
 			on_state_lte_connected(&cloud_msg);
 			break;
-		case CLOUD_STATE_LTE_DISCONNECTED:
+		case STATE_LTE_DISCONNECTED:
 			on_state_lte_disconnected(&cloud_msg);
 			break;
 		default:

@@ -41,35 +41,35 @@ struct modem_msg_data {
 };
 
 /* Modem module connection states. */
-static enum modem_module_state_type {
-	MODEM_STATE_DISCONNECTED,
-	MODEM_STATE_CONNECTING,
-	MODEM_STATE_CONNECTED,
-	MODEM_STATE_SHUTTING_DOWN,
+static enum state_type {
+	STATE_DISCONNECTED,
+	STATE_CONNECTING,
+	STATE_CONNECTED,
+	STATE_SHUTTING_DOWN,
 } state;
 
 /* Forward declarations. */
 static void message_handler(struct modem_msg_data *msg);
 
 /* Convenience function that translates enumerator states to strings. */
-static char *state2str(enum modem_module_state_type state)
+static char *state2str(enum state_type state)
 {
 	switch (state) {
-	case MODEM_STATE_DISCONNECTED:
-		return "MODEM_STATE_DISCONNECTED";
-	case MODEM_STATE_CONNECTING:
-		return "MODEM_STATE_CONNECTING";
-	case MODEM_STATE_CONNECTED:
-		return "MODEM_STATE_CONNECTED";
-	case MODEM_STATE_SHUTTING_DOWN:
-		return "MODEM_STATE_SHUTTING_DOWN";
+	case STATE_DISCONNECTED:
+		return "STATE_DISCONNECTED";
+	case STATE_CONNECTING:
+		return "STATE_CONNECTING";
+	case STATE_CONNECTED:
+		return "STATE_CONNECTED";
+	case STATE_SHUTTING_DOWN:
+		return "STATE_SHUTTING_DOWN";
 	default:
 		return "Unknown state";
 	}
 }
 
 /* Function to set the internal connection state of the Modem module. */
-static void state_set(enum modem_module_state_type new_state)
+static void state_set(enum state_type new_state)
 {
 	if (new_state == state) {
 		LOG_DBG("State: %s", log_strdup(state2str(state)));
@@ -456,18 +456,18 @@ static int modem_setup(void)
 
 /* Message handlers for each state */
 
-static void on_modem_state_disconnected(struct modem_msg_data *msg)
+static void on_state_disconnected(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTED)) {
-		state_set(MODEM_STATE_CONNECTED);
+		state_set(STATE_CONNECTED);
 	}
 
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTING)) {
-		state_set(MODEM_STATE_CONNECTING);
+		state_set(STATE_CONNECTING);
 	}
 }
 
-static void on_modem_state_connecting(struct modem_msg_data *msg)
+static void on_state_connecting(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_EVT_LTE_DISCONNECT)) {
 		int err;
@@ -479,18 +479,18 @@ static void on_modem_state_connecting(struct modem_msg_data *msg)
 			return;
 		}
 
-		state_set(MODEM_STATE_DISCONNECTED);
+		state_set(STATE_DISCONNECTED);
 	}
 
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTED)) {
-		state_set(MODEM_STATE_CONNECTED);
+		state_set(STATE_CONNECTED);
 	}
 }
 
-static void on_modem_state_connected(struct modem_msg_data *msg)
+static void on_state_connected(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_DISCONNECTED)) {
-		state_set(MODEM_STATE_DISCONNECTED);
+		state_set(STATE_DISCONNECTED);
 	}
 }
 
@@ -500,7 +500,7 @@ static void on_all_states(struct modem_msg_data *msg)
 		int err;
 
 		module_start(&self);
-		state_set(MODEM_STATE_DISCONNECTED);
+		state_set(STATE_DISCONNECTED);
 
 		err = modem_setup();
 		if (err) {
@@ -543,7 +543,7 @@ static void on_all_states(struct modem_msg_data *msg)
 
 	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {
 		lte_lc_power_off();
-		state_set(MODEM_STATE_SHUTTING_DOWN);
+		state_set(STATE_SHUTTING_DOWN);
 		SEND_EVENT(modem, MODEM_EVT_SHUTDOWN_READY);
 	}
 }
@@ -551,17 +551,17 @@ static void on_all_states(struct modem_msg_data *msg)
 static void message_handler(struct modem_msg_data *msg)
 {
 	switch (state) {
-	case MODEM_STATE_DISCONNECTED:
-		on_modem_state_disconnected(msg);
+	case STATE_DISCONNECTED:
+		on_state_disconnected(msg);
 		break;
-	case MODEM_STATE_CONNECTING:
-		on_modem_state_connecting(msg);
+	case STATE_CONNECTING:
+		on_state_connecting(msg);
 		break;
-	case MODEM_STATE_CONNECTED:
-		on_modem_state_connected(msg);
+	case STATE_CONNECTED:
+		on_state_connected(msg);
 		break;
-	case MODEM_STATE_SHUTTING_DOWN:
-		LOG_WRN("No action allowed in MODEM_STATE_SHUTTING_DOWN");
+	case STATE_SHUTTING_DOWN:
+		LOG_WRN("No action allowed in STATE_SHUTTING_DOWN");
 		break;
 	default:
 		LOG_WRN("Invalid state: %d", state);

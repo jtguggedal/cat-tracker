@@ -355,7 +355,7 @@ void on_sub_state_passive(struct app_msg_data *msg)
 	    (IS_EVENT(msg, ui, UI_EVT_BUTTON_DATA_READY))) {
 
 		if (IS_EVENT(msg, ui, UI_EVT_BUTTON_DATA_READY) &&
-		    msg->module.ui.data.ui.btn != 2) {
+		    msg->module.ui.data.ui.button_number != 2) {
 			return;
 		}
 

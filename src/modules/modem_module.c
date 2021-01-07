@@ -254,30 +254,33 @@ static int modem_data_get(void)
 	struct modem_module_event *modem_module_event =
 			new_modem_module_event();
 
-	modem_module_event->data.modem.rsrp = rsrp_value_latest;
-	modem_module_event->data.modem.ip =
-		modem_param.network.ip_address.value_string;
-	modem_module_event->data.modem.cell = modem_param.network.cellid_dec;
+	modem_module_event->data.modem.rsrp =
+			rsrp_value_latest;
+	modem_module_event->data.modem.ip_address =
+			modem_param.network.ip_address.value_string;
+	modem_module_event->data.modem.cell_id =
+			modem_param.network.cellid_dec;
 	modem_module_event->data.modem.mccmnc =
 		modem_param.network.current_operator.value_string;
-	modem_module_event->data.modem.area =
+	modem_module_event->data.modem.area_code =
 			modem_param.network.area_code.value;
-	modem_module_event->data.modem.appv = CONFIG_CAT_TRACKER_APP_VERSION;
-	modem_module_event->data.modem.brdv = modem_param.device.board;
-	modem_module_event->data.modem.fw =
+	modem_module_event->data.modem.app_version =
+			CONFIG_CAT_TRACKER_APP_VERSION;
+	modem_module_event->data.modem.board_version =
+			modem_param.device.board;
+	modem_module_event->data.modem.modem_fw =
 		modem_param.device.modem_fw.value_string;
 	modem_module_event->data.modem.iccid =
 			modem_param.sim.iccid.value_string;
-	modem_module_event->data.modem.nw_lte_m =
+	modem_module_event->data.modem.nw_mode_ltem =
 		modem_param.network.lte_mode.value;
-	modem_module_event->data.modem.nw_nb_iot =
+	modem_module_event->data.modem.nw_mode_nbiot =
 		modem_param.network.nbiot_mode.value;
-	modem_module_event->data.modem.nw_gps =
+	modem_module_event->data.modem.nw_mode_gps =
 			modem_param.network.gps_mode.value;
-	modem_module_event->data.modem.bnd =
+	modem_module_event->data.modem.band =
 		modem_param.network.current_band.value;
-	modem_module_event->data.modem.mod_ts = k_uptime_get();
-	modem_module_event->data.modem.mod_ts_static = k_uptime_get();
+	modem_module_event->data.modem.timestamp = k_uptime_get();
 	modem_module_event->type = MODEM_EVT_MODEM_DATA_READY;
 
 	EVENT_SUBMIT(modem_module_event);
@@ -325,8 +328,9 @@ static int battery_data_get(void)
 	struct modem_module_event *modem_module_event =
 			new_modem_module_event();
 
-	modem_module_event->data.bat.bat = modem_param.device.battery.value;
-	modem_module_event->data.bat.bat_ts = k_uptime_get();
+	modem_module_event->data.bat.battery_voltage =
+			modem_param.device.battery.value;
+	modem_module_event->data.bat.timestamp = k_uptime_get();
 	modem_module_event->type = MODEM_EVT_BATTERY_DATA_READY;
 
 	EVENT_SUBMIT(modem_module_event);

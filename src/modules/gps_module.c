@@ -119,13 +119,13 @@ static void gps_data_send(struct gps_pvt *gps_data)
 {
 	struct gps_module_event *gps_module_event = new_gps_module_event();
 
-	gps_module_event->data.gps.longi = gps_data->longitude;
-	gps_module_event->data.gps.lat = gps_data->latitude;
-	gps_module_event->data.gps.alt = gps_data->altitude;
-	gps_module_event->data.gps.acc = gps_data->accuracy;
-	gps_module_event->data.gps.spd = gps_data->speed;
-	gps_module_event->data.gps.hdg = gps_data->heading;
-	gps_module_event->data.gps.gps_ts = k_uptime_get();
+	gps_module_event->data.gps.longitude = gps_data->longitude;
+	gps_module_event->data.gps.latitude = gps_data->latitude;
+	gps_module_event->data.gps.altitude = gps_data->altitude;
+	gps_module_event->data.gps.accuracy = gps_data->accuracy;
+	gps_module_event->data.gps.speed = gps_data->speed;
+	gps_module_event->data.gps.heading = gps_data->heading;
+	gps_module_event->data.gps.timestamp = k_uptime_get();
 	gps_module_event->type = GPS_EVT_DATA_READY;
 
 	EVENT_SUBMIT(gps_module_event);

@@ -33,10 +33,10 @@ struct sensor_msg_data {
 };
 
 /* Sensor module super states. */
-enum sensor_module_state {
+enum sensor_module_state_type {
 	SENSOR_STATE_INIT,
 	SENSOR_STATE_RUNNING
-} sensor_state;
+} state;
 
 K_MSGQ_DEFINE(msgq_sensor, sizeof(struct sensor_msg_data), 10, 4);
 
@@ -44,6 +44,32 @@ static struct module_data self = {
 	.name = "sensor",
 	.msg_q = &msgq_sensor,
 };
+
+static char *state2str(enum sensor_module_state_type state)
+{
+	switch (state) {
+	case SENSOR_STATE_INIT:
+		return "SENSOR_STATE_INIT";
+	case SENSOR_STATE_RUNNING:
+		return "SENSOR_STATE_RUNNING";
+	default:
+		return "Unknown";
+	}
+}
+
+static void state_set(enum sensor_module_state_type new_state)
+{
+	if (new_state == state) {
+		LOG_DBG("State: %s", log_strdup(state2str(state)));
+		return;
+	}
+
+	LOG_DBG("State transition %s --> %s",
+		log_strdup(state2str(state)),
+		log_strdup(state2str(new_state)));
+
+	state = new_state;
+}
 
 #if defined(CONFIG_EXTERNAL_SENSORS)
 static void movement_data_send(const struct ext_sensor_evt *const acc_data)
@@ -200,7 +226,7 @@ static void on_state_init(struct sensor_msg_data *msg)
 
 		ext_sensors_mov_thres_set(movement_threshold);
 #endif
-		sensor_state = SENSOR_STATE_RUNNING;
+		state_set(SENSOR_STATE_RUNNING);
 	}
 }
 
@@ -249,6 +275,8 @@ static void sensor_module(void)
 
 	module_start(&self);
 
+	state_set(SENSOR_STATE_INIT);
+
 	err = setup();
 	if (err) {
 		LOG_ERR("setup, error: %d", err);
@@ -258,7 +286,7 @@ static void sensor_module(void)
 	while (true) {
 		module_get_next_msg(&self, &msg);
 
-		switch (sensor_state) {
+		switch (state) {
 		case SENSOR_STATE_INIT:
 			on_state_init(&msg);
 			break;

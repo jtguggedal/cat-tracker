@@ -404,7 +404,7 @@ static void data_ui_send(void)
 
 	err = cloud_codec_encode_ui_data(&codec, &ui_buf[head_ui_buf]);
 	if (err) {
-		LOG_ERR("Enconding button press, error: %d", err);
+		LOG_ERR("Encoding button press, error: %d", err);
 		SEND_ERROR(data, DATA_EVT_ERROR, err);
 		return;
 	}
@@ -415,12 +415,6 @@ static void data_ui_send(void)
 	evt->data.buffer.len = codec.len;
 
 	pending_data_add(codec.buf);
-
-	/* Since a copy of data is sent we must unqueue the head of the
-	 * UI buffer.
-	 */
-
-	ui_buf[head_ui_buf].queued = false;
 
 	EVENT_SUBMIT(evt);
 }
@@ -696,54 +690,103 @@ static void on_all_states(struct data_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, ui, UI_EVT_BUTTON_DATA_READY)) {
-		cloud_codec_populate_ui_buffer(
-					ui_buf,
-					&msg->module.ui.data.ui,
-					&head_ui_buf);
+		struct cloud_data_ui new_ui_data = {
+			.btn = msg->module.ui.data.ui.btn,
+			.btn_ts = msg->module.ui.data.ui.btn_ts,
+			.queued = true
+		};
+
+		cloud_codec_populate_ui_buffer(ui_buf, &new_ui_data,
+					       &head_ui_buf);
 
 		SEND_EVENT(data, DATA_EVT_UI_DATA_READY);
 		return;
 	}
 
 	if (IS_EVENT(msg, modem, MODEM_EVT_MODEM_DATA_READY)) {
-		cloud_codec_populate_modem_buffer(
-			modem_buf,
-			&msg->module.modem.data.modem,
-			&head_modem_buf);
+		struct cloud_data_modem new_modem_data = {
+			.appv = msg->module.modem.data.modem.appv,
+			.area = msg->module.modem.data.modem.area,
+			.bnd = msg->module.modem.data.modem.bnd,
+			.brdv = msg->module.modem.data.modem.brdv,
+			.cell = msg->module.modem.data.modem.cell,
+			.fw = msg->module.modem.data.modem.fw,
+			.iccid = msg->module.modem.data.modem.iccid,
+			.ip = msg->module.modem.data.modem.ip,
+			.mccmnc = msg->module.modem.data.modem.mccmnc,
+			.mod_ts = msg->module.modem.data.modem.mod_ts,
+			.mod_ts_static =
+				msg->module.modem.data.modem.mod_ts_static,
+			.nw_gps = msg->module.modem.data.modem.nw_gps,
+			.nw_lte_m = msg->module.modem.data.modem.nw_lte_m,
+			.nw_nb_iot = msg->module.modem.data.modem.nw_nb_iot,
+			.rsrp = msg->module.modem.data.modem.rsrp,
+			.queued = true
+		};
+
+		cloud_codec_populate_modem_buffer(modem_buf, &new_modem_data,
+						  &head_modem_buf);
 
 		data_status_set(APP_DATA_MODEM);
 	}
 
 	if (IS_EVENT(msg, modem, MODEM_EVT_BATTERY_DATA_READY)) {
-		cloud_codec_populate_bat_buffer(
-			bat_buf,
-			&msg->module.modem.data.bat,
-			&head_bat_buf);
+		struct cloud_data_battery new_battery_data = {
+			.bat = msg->module.modem.data.bat.bat,
+			.bat_ts = msg->module.modem.data.bat.bat_ts,
+			.queued = true
+		};
+
+		cloud_codec_populate_bat_buffer(bat_buf, &new_battery_data,
+						&head_bat_buf);
 
 		data_status_set(APP_DATA_BATTERY);
 	}
 
 	if (IS_EVENT(msg, sensor, SENSOR_EVT_ENVIRONMENTAL_DATA_READY)) {
-		cloud_codec_populate_sensor_buffer(
-			sensors_buf,
-			&msg->module.sensor.data.sensors,
-			&head_sensor_buf);
+		struct cloud_data_sensors new_sensor_data = {
+			.temp = msg->module.sensor.data.sensors.temp,
+			.hum = msg->module.sensor.data.sensors.hum,
+			.env_ts = msg->module.sensor.data.sensors.env_ts,
+			.queued = true
+		};
+
+		cloud_codec_populate_sensor_buffer(sensors_buf,
+						   &new_sensor_data,
+						   &head_sensor_buf);
 
 		data_status_set(APP_DATA_ENVIRONMENTAL);
 	}
 
+	if (IS_EVENT(msg, sensor, SENSOR_EVT_ENVIRONMENTAL_NOT_SUPPORTED)) {
+		data_status_set(APP_DATA_ENVIRONMENTAL);
+	}
+
 	if (IS_EVENT(msg, sensor, SENSOR_EVT_MOVEMENT_DATA_READY)) {
-		cloud_codec_populate_accel_buffer(
-			accel_buf,
-			&msg->module.sensor.data.accel,
-			&head_accel_buf);
+		struct cloud_data_accelerometer new_movement_data = {
+			.values = {(bool)msg->module.sensor.data.accel.values},
+			.ts = msg->module.sensor.data.accel.ts,
+			.queued = true
+		};
+
+		cloud_codec_populate_accel_buffer(accel_buf, &new_movement_data,
+						  &head_accel_buf);
 	}
 
 	if (IS_EVENT(msg, gps, GPS_EVT_DATA_READY)) {
-		cloud_codec_populate_gps_buffer(
-			gps_buf,
-			&msg->module.gps.data.gps,
-			&head_gps_buf);
+		struct cloud_data_gps new_gps_data = {
+			.acc = msg->module.gps.data.gps.acc,
+			.alt = msg->module.gps.data.gps.alt,
+			.hdg = msg->module.gps.data.gps.hdg,
+			.lat = msg->module.gps.data.gps.lat,
+			.longi = msg->module.gps.data.gps.longi,
+			.spd = msg->module.gps.data.gps.spd,
+			.gps_ts = msg->module.gps.data.gps.gps_ts,
+			.queued = true
+		};
+
+		cloud_codec_populate_gps_buffer(gps_buf, &new_gps_data,
+						&head_gps_buf);
 
 		data_status_set(APP_DATA_GNSS);
 	}

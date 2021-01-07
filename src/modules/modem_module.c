@@ -278,7 +278,6 @@ static int modem_data_get(void)
 		modem_param.network.current_band.value;
 	modem_module_event->data.modem.mod_ts = k_uptime_get();
 	modem_module_event->data.modem.mod_ts_static = k_uptime_get();
-	modem_module_event->data.modem.queued = true;
 	modem_module_event->type = MODEM_EVT_MODEM_DATA_READY;
 
 	EVENT_SUBMIT(modem_module_event);
@@ -328,7 +327,6 @@ static int battery_data_get(void)
 
 	modem_module_event->data.bat.bat = modem_param.device.battery.value;
 	modem_module_event->data.bat.bat_ts = k_uptime_get();
-	modem_module_event->data.bat.queued = true;
 	modem_module_event->type = MODEM_EVT_BATTERY_DATA_READY;
 
 	EVENT_SUBMIT(modem_module_event);

@@ -14,7 +14,6 @@
  */
 
 #include "event_manager.h"
-#include "cloud/cloud_codec/cloud_codec.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,13 +26,20 @@ enum ui_module_event_types {
 	UI_EVT_ERROR
 };
 
+struct ui_module_data {
+	/** Button number. */
+	int btn;
+	/** Button data timestamp. UNIX milliseconds. */
+	int64_t btn_ts;
+};
+
 /** @brief UI event. */
 struct ui_module_event {
 	struct event_header header;
 	enum ui_module_event_types type;
 
 	union {
-		struct cloud_data_ui ui;
+		struct ui_module_data ui;
 		int err;
 	} data;
 };

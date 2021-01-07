@@ -16,7 +16,6 @@
 #include <drivers/gps.h>
 
 #include "event_manager.h"
-#include "cloud/cloud_codec/cloud_codec.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,13 +32,30 @@ enum gps_module_event_type {
 	GPS_EVT_ERROR_CODE,
 };
 
+struct gps_module_data {
+	/** GPS data timestamp. UNIX milliseconds. */
+	int64_t gps_ts;
+	/** Longitude */
+	double longi;
+	/** Latitude */
+	double lat;
+	/** Altitude above WGS-84 ellipsoid in meters. */
+	float alt;
+	/** Accuracy in (2D 1-sigma) in meters. */
+	float acc;
+	/** Horizontal speed in meters. */
+	float spd;
+	/** Heading of movement in degrees. */
+	float hdg;
+};
+
 /** @brief GPS event. */
 struct gps_module_event {
 	struct event_header header;
 	enum gps_module_event_type type;
 
 	union {
-		struct cloud_data_gps gps;
+		struct gps_module_data gps;
 		struct gps_agps_request agps_request;
 		int err;
 	} data;

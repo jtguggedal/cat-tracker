@@ -216,6 +216,15 @@ static bool event_handler(const struct event_header *eh)
 		module_enqueue_msg(&self, &app_msg);
 	}
 
+	if (is_ui_module_event(eh)) {
+		struct ui_module_event *event = cast_ui_module_event(eh);
+		struct app_msg_data app_msg = {
+			.module.ui = *event
+		};
+
+		module_enqueue_msg(&self, &app_msg);
+	}
+
 	return false;
 }
 
@@ -342,7 +351,18 @@ void on_sub_state_passive(struct app_msg_data *msg)
 		k_timer_stop(&data_sample_timer);
 	}
 
-	if (IS_EVENT(msg, sensor, SENSOR_EVT_MOVEMENT_DATA_READY)) {
+	if ((IS_EVENT(msg, sensor, SENSOR_EVT_MOVEMENT_DATA_READY)) ||
+	    (IS_EVENT(msg, ui, UI_EVT_BUTTON_DATA_READY))) {
+
+		if (IS_EVENT(msg, ui, UI_EVT_BUTTON_DATA_READY) &&
+		    msg->module.ui.data.ui.btn != 2) {
+			return;
+		}
+
+		/* Trigger sample/publication cycle if there has been movement
+		 * or button 2 has been pushed on the DK.
+		 */
+
 		if (k_timer_remaining_get(&movement_resolution_timer) == 0) {
 			/* Do an initial data sample. */
 			data_sample_timer_handler(NULL);

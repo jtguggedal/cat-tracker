@@ -126,7 +126,6 @@ static void gps_data_send(struct gps_pvt *gps_data)
 	gps_module_event->data.gps.spd = gps_data->speed;
 	gps_module_event->data.gps.hdg = gps_data->heading;
 	gps_module_event->data.gps.gps_ts = k_uptime_get();
-	gps_module_event->data.gps.queued = true;
 	gps_module_event->type = GPS_EVT_DATA_READY;
 
 	EVENT_SUBMIT(gps_module_event);

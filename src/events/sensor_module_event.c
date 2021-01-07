@@ -21,6 +21,9 @@ static int log_sensor_module_event(const struct event_header *eh, char *buf,
 	case SENSOR_EVT_ENVIRONMENTAL_DATA_READY:
 		strcpy(event_name, "SENSOR_EVT_ENVIRONMENTAL_DATA_READY");
 		break;
+	case SENSOR_EVT_ENVIRONMENTAL_NOT_SUPPORTED:
+		strcpy(event_name, "SENSOR_EVT_ENVIRONMENTAL_NOT_SUPPORTED");
+		break;
 	case SENSOR_EVT_SHUTDOWN_READY:
 		strcpy(event_name, "SENSOR_EVT_SHUTDOWN_READY");
 		break;

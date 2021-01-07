@@ -14,18 +14,36 @@
  */
 
 #include "event_manager.h"
-#include "cloud/cloud_codec/cloud_codec.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#define ACCELEROMETER_AXIS_COUNT 3
+
 /** @brief Sensor event types su bmitted by Sensor module. */
 enum sensor_module_event_types {
 	SENSOR_EVT_MOVEMENT_DATA_READY,
 	SENSOR_EVT_ENVIRONMENTAL_DATA_READY,
+	SENSOR_EVT_ENVIRONMENTAL_NOT_SUPPORTED,
 	SENSOR_EVT_SHUTDOWN_READY,
 	SENSOR_EVT_ERROR
+};
+
+struct sensor_module_data {
+	/** Environmental sensors timestamp. UNIX milliseconds. */
+	int64_t env_ts;
+	/** Temperature in celcius */
+	double temp;
+	/** Humidity level in percentage */
+	double hum;
+};
+
+struct sensor_module_accel_data {
+	/** Accelerometer readings timestamp. UNIX milliseconds. */
+	int64_t ts;
+	/** Accelerometer readings. */
+	double values[ACCELEROMETER_AXIS_COUNT];
 };
 
 /** @brief Sensor event. */
@@ -33,8 +51,8 @@ struct sensor_module_event {
 	struct event_header header;
 	enum sensor_module_event_types type;
 	union {
-		struct cloud_data_sensors sensors;
-		struct cloud_data_accelerometer accel;
+		struct sensor_module_data sensors;
+		struct sensor_module_accel_data accel;
 		int err;
 	} data;
 };

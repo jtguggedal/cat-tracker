@@ -91,8 +91,7 @@ static void movement_data_send(const struct ext_sensor_evt *const acc_data)
 				acc_data->value_array[1];
 		sensor_module_event->data.accel.values[2] =
 				acc_data->value_array[2];
-		sensor_module_event->data.accel.ts = k_uptime_get();
-		sensor_module_event->data.accel.queued = true;
+		sensor_module_event->data.accel.timestamp = k_uptime_get();
 		sensor_module_event->type = SENSOR_EVT_MOVEMENT_DATA_READY;
 
 		EVENT_SUBMIT(sensor_module_event);
@@ -134,10 +133,9 @@ static int environmental_data_get(void)
 	}
 
 	sensor_module_event = new_sensor_module_event();
-	sensor_module_event->data.sensors.env_ts = k_uptime_get();
-	sensor_module_event->data.sensors.temp = temp;
-	sensor_module_event->data.sensors.hum = hum;
-	sensor_module_event->data.sensors.queued = true;
+	sensor_module_event->data.sensors.timestamp = k_uptime_get();
+	sensor_module_event->data.sensors.temperature = temp;
+	sensor_module_event->data.sensors.humidity = hum;
 	sensor_module_event->type = SENSOR_EVT_ENVIRONMENTAL_DATA_READY;
 #else
 
@@ -152,8 +150,7 @@ static int environmental_data_get(void)
 	 * This makes sure that the entry is not stored in the circular buffer.
 	 */
 	sensor_module_event = new_sensor_module_event();
-	sensor_module_event->data.sensors.queued = false;
-	sensor_module_event->type = SENSOR_EVT_ENVIRONMENTAL_DATA_READY;
+	sensor_module_event->type = SENSOR_EVT_ENVIRONMENTAL_NOT_SUPPORTED;
 #endif
 	EVENT_SUBMIT(sensor_module_event);
 

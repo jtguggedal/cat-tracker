@@ -14,7 +14,6 @@
  */
 
 #include "event_manager.h"
-#include "cloud/cloud_codec/cloud_codec.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,13 +57,53 @@ struct modem_module_edrx {
 	float ptw;
 };
 
+struct modem_module_modem_data {
+	/** Dynamic modem data timestamp. UNIX milliseconds. */
+	int64_t mod_ts;
+	/** Static modem data timestamp. UNIX milliseconds. */
+	int64_t mod_ts_static;
+	/** Area code. */
+	uint16_t area;
+	/** Cell id. */
+	uint16_t cell;
+	/** Band number. */
+	uint16_t bnd;
+	/** Network mode GPS. */
+	uint16_t nw_gps;
+	/** Network mode LTE-M. */
+	uint16_t nw_lte_m;
+	/** Network mode NB-IoT. */
+	uint16_t nw_nb_iot;
+	/** Reference Signal Received Power. */
+	uint16_t rsrp;
+	/** Internet Protocol Address. */
+	char *ip;
+	/* Mobile Country Code*/
+	char *mccmnc;
+	/** Application version and Mobile Network Code. */
+	char *appv;
+	/** Device board version. */
+	const char *brdv;
+	/** Modem firmware. */
+	char *fw;
+	/** Integrated Circuit Card Identifier. */
+	char *iccid;
+};
+
+struct modem_module_battery_data {
+	/** Battery voltage level. */
+	uint16_t bat;
+	/** Battery data timestamp. UNIX milliseconds. */
+	int64_t bat_ts;
+};
+
 /** @brief Modem event. */
 struct modem_module_event {
 	struct event_header header;
 	enum modem_module_event_type type;
 	union {
-		struct cloud_data_modem modem;
-		struct cloud_data_battery bat;
+		struct modem_module_modem_data modem;
+		struct modem_module_battery_data bat;
 		struct modem_module_cell cell;
 		struct modem_module_psm psm;
 		struct modem_module_edrx edrx;

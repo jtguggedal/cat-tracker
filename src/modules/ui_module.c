@@ -13,7 +13,6 @@
 
 #include "modules_common.h"
 #include "events/ui_module_event.h"
-#include "events/sensor_module_event.h"
 #include "events/app_module_event.h"
 #include "events/util_module_event.h"
 
@@ -35,16 +34,7 @@ static void message_handler(struct ui_msg_data *msg);
 
 static void button_handler(uint32_t button_states, uint32_t has_changed)
 {
-	static int try_again_timeout;
-
-	/* Publication of data due to button presses limited
-	 * to 1 push every 2 seconds to avoid spamming.
-	 */
-	if ((has_changed & button_states & DK_BTN1_MSK) &&
-	    k_uptime_get() - try_again_timeout > 2 * 1000) {
-		LOG_DBG("Cloud publication by button 1 triggered, ");
-		LOG_DBG("2 seconds to next allowed cloud publication ");
-		LOG_DBG("triggered by button 1");
+	if (has_changed & button_states & DK_BTN1_MSK) {
 
 		struct ui_module_event *ui_module_event =
 				new_ui_module_event();
@@ -52,32 +42,22 @@ static void button_handler(uint32_t button_states, uint32_t has_changed)
 		ui_module_event->type = UI_EVT_BUTTON_DATA_READY;
 		ui_module_event->data.ui.btn = 1;
 		ui_module_event->data.ui.btn_ts = k_uptime_get();
-		ui_module_event->data.ui.queued = true;
 
 		EVENT_SUBMIT(ui_module_event);
-
-		try_again_timeout = k_uptime_get();
 	}
 
 #if defined(CONFIG_BOARD_NRF9160DK_NRF9160NS)
-	/* Fake motion. The nRF9160 DK does not have an accelerometer by
-	 * default.
-	 */
 	if (has_changed & button_states & DK_BTN2_MSK) {
-		LOG_DBG("Button 2 on DK triggered");
-		LOG_DBG("Fake movement");
 
-		/* Send sensor event signifying that movement has been
-		 * triggered. Set queued flag to false to signify that
-		 * no data is carried in the message.
-		 */
-		struct sensor_module_event *sensor_module_event =
-				new_sensor_module_event();
+		struct ui_module_event *ui_module_event =
+				new_ui_module_event();
 
-		sensor_module_event->type = SENSOR_EVT_MOVEMENT_DATA_READY;
-		sensor_module_event->data.accel.queued = false;
+		ui_module_event->type = UI_EVT_BUTTON_DATA_READY;
+		ui_module_event->data.ui.btn = 2;
+		ui_module_event->data.ui.btn_ts = k_uptime_get();
 
-		EVENT_SUBMIT(sensor_module_event);
+		EVENT_SUBMIT(ui_module_event);
+
 	}
 #endif
 }

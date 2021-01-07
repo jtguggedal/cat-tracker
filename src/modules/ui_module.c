@@ -40,8 +40,8 @@ static void button_handler(uint32_t button_states, uint32_t has_changed)
 				new_ui_module_event();
 
 		ui_module_event->type = UI_EVT_BUTTON_DATA_READY;
-		ui_module_event->data.ui.btn = 1;
-		ui_module_event->data.ui.btn_ts = k_uptime_get();
+		ui_module_event->data.ui.button_number = 1;
+		ui_module_event->data.ui.timestamp = k_uptime_get();
 
 		EVENT_SUBMIT(ui_module_event);
 	}
@@ -53,8 +53,8 @@ static void button_handler(uint32_t button_states, uint32_t has_changed)
 				new_ui_module_event();
 
 		ui_module_event->type = UI_EVT_BUTTON_DATA_READY;
-		ui_module_event->data.ui.btn = 2;
-		ui_module_event->data.ui.btn_ts = k_uptime_get();
+		ui_module_event->data.ui.button_number = 2;
+		ui_module_event->data.ui.timestamp = k_uptime_get();
 
 		EVENT_SUBMIT(ui_module_event);
 

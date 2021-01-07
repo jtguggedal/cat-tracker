@@ -33,20 +33,13 @@ enum gps_module_event_type {
 };
 
 struct gps_module_data {
-	/** GPS data timestamp. UNIX milliseconds. */
-	int64_t gps_ts;
-	/** Longitude */
-	double longi;
-	/** Latitude */
-	double lat;
-	/** Altitude above WGS-84 ellipsoid in meters. */
-	float alt;
-	/** Accuracy in (2D 1-sigma) in meters. */
-	float acc;
-	/** Horizontal speed in meters. */
-	float spd;
-	/** Heading of movement in degrees. */
-	float hdg;
+	int64_t timestamp;
+	double longitude;
+	double latitude;
+	float altitude;
+	float accuracy;
+	float speed;
+	float heading;
 };
 
 /** @brief GPS event. */

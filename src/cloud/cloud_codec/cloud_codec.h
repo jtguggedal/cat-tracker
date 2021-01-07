@@ -95,10 +95,8 @@ struct cloud_data_sensors {
 };
 
 struct cloud_data_modem {
-	/** Dynamic modem data timestamp. UNIX milliseconds. */
+	/** Modem data timestamp. UNIX milliseconds. */
 	int64_t mod_ts;
-	/** Static modem data timestamp. UNIX milliseconds. */
-	int64_t mod_ts_static;
 	/** Area code. */
 	uint16_t area;
 	/** Cell id. */

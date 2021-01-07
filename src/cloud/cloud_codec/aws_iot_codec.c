@@ -69,6 +69,7 @@ static int static_modem_data_add(cJSON *parent, struct cloud_data_modem *data)
 {
 	int err = 0;
 	char nw_mode[50];
+	int64_t mod_ts_prev = data->mod_ts;
 
 	static const char lte_string[] = "LTE-M";
 	static const char nbiot_string[] = "NB-IoT";
@@ -79,7 +80,7 @@ static int static_modem_data_add(cJSON *parent, struct cloud_data_modem *data)
 		goto exit;
 	}
 
-	err = date_time_uptime_to_unix_time_ms(&data->mod_ts_static);
+	err = date_time_uptime_to_unix_time_ms(&data->mod_ts);
 	if (err) {
 		LOG_ERR("date_time_uptime_to_unix_time_ms, error: %d", err);
 		return err;
@@ -112,8 +113,11 @@ static int static_modem_data_add(cJSON *parent, struct cloud_data_modem *data)
 	err += json_add_str(static_m_v, MODEM_APP_VERSION, data->appv);
 
 	err += json_add_obj(static_m, OBJECT_VALUE, static_m_v);
-	err += json_add_number(static_m, OBJECT_TIMESTAMP, data->mod_ts_static);
+	err += json_add_number(static_m, OBJECT_TIMESTAMP, data->mod_ts);
 	err += json_add_obj(parent, DATA_MODEM_STATIC, static_m);
+
+	/* Possible solution? */
+	data->mod_ts = mod_ts_prev;
 
 	if (err) {
 		return err;

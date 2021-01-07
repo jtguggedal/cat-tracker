@@ -31,18 +31,13 @@ enum sensor_module_event_types {
 };
 
 struct sensor_module_data {
-	/** Environmental sensors timestamp. UNIX milliseconds. */
-	int64_t env_ts;
-	/** Temperature in celcius */
-	double temp;
-	/** Humidity level in percentage */
-	double hum;
+	int64_t timestamp;
+	double temperature;
+	double humidity;
 };
 
 struct sensor_module_accel_data {
-	/** Accelerometer readings timestamp. UNIX milliseconds. */
-	int64_t ts;
-	/** Accelerometer readings. */
+	int64_t timestamp;
 	double values[ACCELEROMETER_AXIS_COUNT];
 };
 

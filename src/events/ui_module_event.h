@@ -27,10 +27,8 @@ enum ui_module_event_types {
 };
 
 struct ui_module_data {
-	/** Button number. */
-	int btn;
-	/** Button data timestamp. UNIX milliseconds. */
-	int64_t btn_ts;
+	int button_number;
+	int64_t timestamp;
 };
 
 /** @brief UI event. */

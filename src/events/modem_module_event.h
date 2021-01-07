@@ -58,43 +58,25 @@ struct modem_module_edrx {
 };
 
 struct modem_module_modem_data {
-	/** Dynamic modem data timestamp. UNIX milliseconds. */
-	int64_t mod_ts;
-	/** Static modem data timestamp. UNIX milliseconds. */
-	int64_t mod_ts_static;
-	/** Area code. */
-	uint16_t area;
-	/** Cell id. */
-	uint16_t cell;
-	/** Band number. */
-	uint16_t bnd;
-	/** Network mode GPS. */
-	uint16_t nw_gps;
-	/** Network mode LTE-M. */
-	uint16_t nw_lte_m;
-	/** Network mode NB-IoT. */
-	uint16_t nw_nb_iot;
-	/** Reference Signal Received Power. */
+	int64_t timestamp;
+	uint16_t area_code;
+	uint16_t cell_id;
+	uint16_t band;
+	uint16_t nw_mode_gps;
+	uint16_t nw_mode_ltem;
+	uint16_t nw_mode_nbiot;
 	uint16_t rsrp;
-	/** Internet Protocol Address. */
-	char *ip;
-	/* Mobile Country Code*/
+	char *ip_address;
 	char *mccmnc;
-	/** Application version and Mobile Network Code. */
-	char *appv;
-	/** Device board version. */
-	const char *brdv;
-	/** Modem firmware. */
-	char *fw;
-	/** Integrated Circuit Card Identifier. */
+	char *app_version;
+	const char *board_version;
+	char *modem_fw;
 	char *iccid;
 };
 
 struct modem_module_battery_data {
-	/** Battery voltage level. */
-	uint16_t bat;
-	/** Battery data timestamp. UNIX milliseconds. */
-	int64_t bat_ts;
+	uint16_t battery_voltage;
+	int64_t timestamp;
 };
 
 /** @brief Modem event. */

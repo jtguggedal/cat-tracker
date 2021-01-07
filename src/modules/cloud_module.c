@@ -51,12 +51,12 @@ struct cloud_backoff_delay_lookup {
 static enum cloud_module_state_type {
 	CLOUD_STATE_LTE_DISCONNECTED,
 	CLOUD_STATE_LTE_CONNECTED
-} cloud_state;
+} state;
 
 static enum cloud_module_sub_state_type {
 	CLOUD_SUB_STATE_CLOUD_DISCONNECTED,
 	CLOUD_SUB_STATE_CLOUD_CONNECTED
-} cloud_sub_state;
+} sub_state;
 
 /* Lookup table for backoff reconnection to cloud. Binary scaling. */
 static struct cloud_backoff_delay_lookup backoff_delay[] = {
@@ -83,14 +83,56 @@ static struct module_data self = {
 
 static void connect_check_work_fn(struct k_work *work);
 
-static void state_set(enum cloud_module_state_type new_state)
+static char *state2str(enum cloud_module_state_type state)
 {
-	cloud_state = new_state;
+	switch (state) {
+	case CLOUD_STATE_LTE_DISCONNECTED:
+		return "CLOUD_STATE_LTE_DISCONNECTED";
+	case CLOUD_STATE_LTE_CONNECTED:
+		return "CLOUD_STATE_LTE_CONNECTED";
+	default:
+		return "Unknown";
+	}
+}
+
+static char *sub_state2str(enum cloud_module_sub_state_type state)
+{
+	switch (state) {
+	case CLOUD_SUB_STATE_CLOUD_DISCONNECTED:
+		return "CLOUD_SUB_STATE_CLOUD_DISCONNECTED";
+	case CLOUD_SUB_STATE_CLOUD_CONNECTED:
+		return "CLOUD_SUB_STATE_CLOUD_CONNECTED";
+	default:
+		return "Unknown";
+	}
+}
+
+static void state_set(enum cloud_module_sub_state_type new_state)
+{
+	if (new_state == state) {
+		LOG_DBG("State: %s", log_strdup(state2str(state)));
+		return;
+	}
+
+	LOG_DBG("State transition %s --> %s",
+		log_strdup(state2str(state)),
+		log_strdup(state2str(new_state)));
+
+	state = new_state;
 }
 
 static void sub_state_set(enum cloud_module_sub_state_type new_state)
 {
-	cloud_sub_state = new_state;
+	if (new_state == state) {
+		LOG_DBG("State: %s", log_strdup(sub_state2str(state)));
+		return;
+	}
+
+	LOG_DBG("State transition %s --> %s",
+		log_strdup(sub_state2str(state)),
+		log_strdup(sub_state2str(new_state)));
+
+	sub_state = new_state;
 }
 
 static void send_data_ack(void *ptr)
@@ -524,9 +566,9 @@ static void cloud_module(void)
 	while (true) {
 		module_get_next_msg(&self, &cloud_msg);
 
-		switch (cloud_state) {
+		switch (state) {
 		case CLOUD_STATE_LTE_CONNECTED:
-			switch (cloud_sub_state) {
+			switch (sub_state) {
 			case CLOUD_SUB_STATE_CLOUD_CONNECTED:
 				on_sub_state_cloud_connected(&cloud_msg);
 				break;

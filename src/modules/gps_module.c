@@ -44,23 +44,65 @@ struct gps_msg_data {
 static enum gps_module_state_type {
 	GPS_STATE_INIT,
 	GPS_STATE_RUNNING
-} gps_state;
+} state;
 
 static enum gps_module_sub_state_type {
 	GPS_SUB_STATE_IDLE,
 	GPS_SUB_STATE_SEARCH
-} gps_sub_state;
+} sub_state;
 
 static void message_handler(struct gps_msg_data *data);
 
+static char *state2str(enum gps_module_state_type state)
+{
+	switch (state) {
+	case GPS_STATE_INIT:
+		return "GPS_STATE_INIT";
+	case GPS_STATE_RUNNING:
+		return "GPS_STATE_RUNNING";
+	default:
+		return "Unknown";
+	}
+}
+
+static char *sub_state2str(enum gps_module_sub_state_type state)
+{
+	switch (state) {
+	case GPS_SUB_STATE_IDLE:
+		return "GPS_SUB_STATE_IDLE";
+	case GPS_SUB_STATE_SEARCH:
+		return "GPS_SUB_STATE_SEARCH";
+	default:
+		return "Unknown";
+	}
+}
+
 static void state_set(enum gps_module_state_type new_state)
 {
-	gps_state = new_state;
+	if (new_state == state) {
+		LOG_DBG("State: %s", log_strdup(state2str(state)));
+		return;
+	}
+
+	LOG_DBG("State transition %s --> %s",
+		log_strdup(state2str(state)),
+		log_strdup(state2str(new_state)));
+
+	state = new_state;
 }
 
 static void sub_state_set(enum gps_module_sub_state_type new_state)
 {
-	gps_sub_state = new_state;
+	if (new_state == sub_state) {
+		LOG_DBG("State: %s", log_strdup(sub_state2str(sub_state)));
+		return;
+	}
+
+	LOG_DBG("State transition %s --> %s",
+		log_strdup(sub_state2str(sub_state)),
+		log_strdup(sub_state2str(new_state)));
+
+	sub_state = new_state;
 }
 
 /* GPS device. Used to identify the GPS driver in the sensor API. */
@@ -318,8 +360,8 @@ static void on_all_states(struct gps_msg_data *msg)
 	if (IS_EVENT(msg, app, APP_EVT_START)) {
 		int err;
 
-		state_set(GPS_STATE_INIT);
 		module_start(&self);
+		state_set(GPS_STATE_INIT);
 
 		err = setup();
 		if (err) {
@@ -335,12 +377,12 @@ static void on_all_states(struct gps_msg_data *msg)
 
 static void message_handler(struct gps_msg_data *msg)
 {
-	switch (gps_state) {
+	switch (state) {
 	case GPS_STATE_INIT:
 		on_state_init(msg);
 		break;
 	case GPS_STATE_RUNNING:
-		switch (gps_sub_state) {
+		switch (sub_state) {
 		case GPS_SUB_STATE_SEARCH:
 			on_state_running_gps_search(msg);
 			break;

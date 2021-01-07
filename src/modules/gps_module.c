@@ -41,43 +41,43 @@ struct gps_msg_data {
 };
 
 /* GPS module super states. */
-static enum gps_module_state_type {
-	GPS_STATE_INIT,
-	GPS_STATE_RUNNING
+static enum state_type {
+	STATE_INIT,
+	STATE_RUNNING
 } state;
 
-static enum gps_module_sub_state_type {
-	GPS_SUB_STATE_IDLE,
-	GPS_SUB_STATE_SEARCH
+static enum sub_state_type {
+	SUB_STATE_IDLE,
+	SUB_STATE_SEARCH
 } sub_state;
 
 static void message_handler(struct gps_msg_data *data);
 
-static char *state2str(enum gps_module_state_type state)
+static char *state2str(enum state_type new_state)
 {
-	switch (state) {
-	case GPS_STATE_INIT:
-		return "GPS_STATE_INIT";
-	case GPS_STATE_RUNNING:
-		return "GPS_STATE_RUNNING";
+	switch (new_state) {
+	case STATE_INIT:
+		return "STATE_INIT";
+	case STATE_RUNNING:
+		return "STATE_RUNNING";
 	default:
 		return "Unknown";
 	}
 }
 
-static char *sub_state2str(enum gps_module_sub_state_type state)
+static char *sub_state2str(enum sub_state_type new_state)
 {
-	switch (state) {
-	case GPS_SUB_STATE_IDLE:
-		return "GPS_SUB_STATE_IDLE";
-	case GPS_SUB_STATE_SEARCH:
-		return "GPS_SUB_STATE_SEARCH";
+	switch (new_state) {
+	case SUB_STATE_IDLE:
+		return "SUB_STATE_IDLE";
+	case SUB_STATE_SEARCH:
+		return "SUB_STATE_SEARCH";
 	default:
 		return "Unknown";
 	}
 }
 
-static void state_set(enum gps_module_state_type new_state)
+static void state_set(enum state_type new_state)
 {
 	if (new_state == state) {
 		LOG_DBG("State: %s", log_strdup(state2str(state)));
@@ -91,14 +91,14 @@ static void state_set(enum gps_module_state_type new_state)
 	state = new_state;
 }
 
-static void sub_state_set(enum gps_module_sub_state_type new_state)
+static void sub_state_set(enum sub_state_type new_state)
 {
 	if (new_state == sub_state) {
-		LOG_DBG("State: %s", log_strdup(sub_state2str(sub_state)));
+		LOG_DBG("Sub state: %s", log_strdup(sub_state2str(sub_state)));
 		return;
 	}
 
-	LOG_DBG("State transition %s --> %s",
+	LOG_DBG("Sub state transition %s --> %s",
 		log_strdup(sub_state2str(sub_state)),
 		log_strdup(sub_state2str(new_state)));
 
@@ -310,7 +310,7 @@ static void on_state_init(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
 		gps_cfg.timeout = msg->module.data.data.cfg.gpst;
-		state_set(GPS_STATE_RUNNING);
+		state_set(STATE_RUNNING);
 	}
 }
 
@@ -324,7 +324,7 @@ static void on_state_running(struct gps_msg_data *msg)
 static void on_state_running_gps_search(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_INACTIVE)) {
-		sub_state_set(GPS_SUB_STATE_IDLE);
+		sub_state_set(SUB_STATE_IDLE);
 	}
 
 	if (IS_EVENT(msg, app, APP_EVT_DATA_GET)) {
@@ -342,7 +342,7 @@ static void on_state_running_gps_search(struct gps_msg_data *msg)
 static void on_state_running_gps_idle(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_ACTIVE)) {
-		sub_state_set(GPS_SUB_STATE_SEARCH);
+		sub_state_set(SUB_STATE_SEARCH);
 	}
 
 	if (IS_EVENT(msg, app, APP_EVT_DATA_GET)) {
@@ -361,7 +361,7 @@ static void on_all_states(struct gps_msg_data *msg)
 		int err;
 
 		module_start(&self);
-		state_set(GPS_STATE_INIT);
+		state_set(STATE_INIT);
 
 		err = setup();
 		if (err) {
@@ -378,15 +378,15 @@ static void on_all_states(struct gps_msg_data *msg)
 static void message_handler(struct gps_msg_data *msg)
 {
 	switch (state) {
-	case GPS_STATE_INIT:
+	case STATE_INIT:
 		on_state_init(msg);
 		break;
-	case GPS_STATE_RUNNING:
+	case STATE_RUNNING:
 		switch (sub_state) {
-		case GPS_SUB_STATE_SEARCH:
+		case SUB_STATE_SEARCH:
 			on_state_running_gps_search(msg);
 			break;
-		case GPS_SUB_STATE_IDLE:
+		case SUB_STATE_IDLE:
 			on_state_running_gps_idle(msg);
 			break;
 		default:

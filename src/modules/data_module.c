@@ -88,9 +88,9 @@ static struct cloud_data_cfg current_cfg = {
 };
 
 /* Cloud connection state. */
-enum data_module_state_type {
-	DATA_STATE_CLOUD_DISCONNECTED,
-	DATA_STATE_CLOUD_CONNECTED
+static enum state_type {
+	STATE_CLOUD_DISCONNECTED,
+	STATE_CLOUD_CONNECTED
 } state;
 
 static struct k_delayed_work data_send_work;
@@ -123,19 +123,19 @@ static int config_settings_handler(const char *key, size_t len,
 SETTINGS_STATIC_HANDLER_DEFINE(MODULE, DEVICE_SETTINGS_KEY, NULL,
 			       config_settings_handler, NULL, NULL);
 
-static char *state2str(enum data_module_state_type state)
+static char *state2str(enum state_type new_state)
 {
-	switch (state) {
-	case DATA_STATE_CLOUD_DISCONNECTED:
-		return "DATA_STATE_CLOUD_DISCONNECTED";
-	case DATA_STATE_CLOUD_CONNECTED:
-		return "DATA_STATE_CLOUD_CONNECTED";
+	switch (new_state) {
+	case STATE_CLOUD_DISCONNECTED:
+		return "STATE_CLOUD_DISCONNECTED";
+	case STATE_CLOUD_CONNECTED:
+		return "STATE_CLOUD_CONNECTED";
 	default:
 		return "Unknown";
 	}
 }
 
-static void state_set(enum data_module_state_type new_state)
+static void state_set(enum state_type new_state)
 {
 	if (new_state == state) {
 		LOG_DBG("State: %s", log_strdup(state2str(state)));
@@ -551,7 +551,7 @@ static void on_cloud_state_disconnected(struct data_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_CONNECTED)) {
 		date_time_update_async(date_time_event_handler);
-		state_set(DATA_STATE_CLOUD_CONNECTED);
+		state_set(STATE_CLOUD_CONNECTED);
 	}
 }
 
@@ -578,7 +578,7 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_DISCONNECTED)) {
-		state_set(DATA_STATE_CLOUD_DISCONNECTED);
+		state_set(STATE_CLOUD_DISCONNECTED);
 		return;
 	}
 
@@ -767,7 +767,7 @@ static void data_module(void)
 
 	module_start(&self);
 
-	state_set(DATA_STATE_CLOUD_DISCONNECTED);
+	state_set(STATE_CLOUD_DISCONNECTED);
 
 	err = setup();
 	if (err) {
@@ -779,10 +779,10 @@ static void data_module(void)
 		module_get_next_msg(&self, &msg);
 
 		switch (state) {
-		case DATA_STATE_CLOUD_DISCONNECTED:
+		case STATE_CLOUD_DISCONNECTED:
 			on_cloud_state_disconnected(&msg);
 			break;
-		case DATA_STATE_CLOUD_CONNECTED:
+		case STATE_CLOUD_CONNECTED:
 			on_cloud_state_connected(&msg);
 			break;
 		default:

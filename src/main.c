@@ -49,10 +49,10 @@ struct app_msg_data {
 };
 
 /* Application module super states. */
-enum app_state {
-	APP_STATE_INIT,
-	APP_STATE_RUNNING
-} app_state;
+static enum state_type {
+	STATE_INIT,
+	STATE_RUNNING
+} state;
 
 /* Application sub states. The application can be in either active or passive
  * mode.
@@ -63,10 +63,10 @@ enum app_state {
  * Passive mode: Sensor data and GPS position is acquired when movement is
  *		 detected, or after the configured movement timeout occurs.
  */
-enum app_sub_state {
-	APP_SUB_STATE_ACTIVE_MODE,
-	APP_SUB_STATE_PASSIVE_MODE,
-} app_sub_state;
+static enum sub_state_type {
+	SUB_STATE_ACTIVE_MODE,
+	SUB_STATE_PASSIVE_MODE,
+} sub_state;
 
 /* Internal copy of the device configuration. */
 static struct cloud_data_cfg app_cfg;
@@ -104,56 +104,56 @@ static struct module_data self = {
 	.msg_q = &msgq_app,
 };
 
-static char *state2str(enum app_state state)
+static char *state2str(enum state_type new_state)
 {
-	switch (state) {
-	case APP_STATE_INIT:
-		return "APP_STATE_INIT";
-	case APP_STATE_RUNNING:
-		return "APP_STATE_RUNNING";
+	switch (new_state) {
+	case STATE_INIT:
+		return "STATE_INIT";
+	case STATE_RUNNING:
+		return "STATE_RUNNING";
 	default:
 		return "Unknown";
 	}
 }
 
-static char *sub_state2str(enum app_sub_state state)
+static char *sub_state2str(enum sub_state_type new_state)
 {
-	switch (state) {
-	case APP_SUB_STATE_ACTIVE_MODE:
-		return "APP_SUB_STATE_ACTIVE_MODE";
-	case APP_SUB_STATE_PASSIVE_MODE:
-		return "APP_SUB_STATE_PASSIVE_MODE";
+	switch (new_state) {
+	case SUB_STATE_ACTIVE_MODE:
+		return "SUB_STATE_ACTIVE_MODE";
+	case SUB_STATE_PASSIVE_MODE:
+		return "SUB_STATE_PASSIVE_MODE";
 	default:
 		return "Unknown";
 	}
 }
 
-static void state_set(enum app_state new_state)
+static void state_set(enum state_type new_state)
 {
-	if (new_state == app_state) {
-		LOG_DBG("State: %s", log_strdup(state2str(app_state)));
+	if (new_state == state) {
+		LOG_DBG("State: %s", log_strdup(state2str(state)));
 		return;
 	}
 
 	LOG_DBG("State transition %s --> %s",
-		log_strdup(state2str(app_state)),
+		log_strdup(state2str(state)),
 		log_strdup(state2str(new_state)));
 
-	app_state = new_state;
+	state = new_state;
 }
 
-static void sub_state_set(enum app_sub_state new_state)
+static void sub_state_set(enum sub_state_type new_state)
 {
-	if (new_state == app_sub_state) {
-		LOG_DBG("State: %s", log_strdup(sub_state2str(app_sub_state)));
+	if (new_state == sub_state) {
+		LOG_DBG("Sub state: %s", log_strdup(sub_state2str(sub_state)));
 		return;
 	}
 
-	LOG_DBG("Time state transition %s --> %s",
-		log_strdup(sub_state2str(app_sub_state)),
+	LOG_DBG("Sub state transition %s --> %s",
+		log_strdup(sub_state2str(sub_state)),
 		log_strdup(sub_state2str(new_state)));
 
-	app_sub_state = new_state;
+	sub_state = new_state;
 }
 
 /* Event manager handler. Puts event data into messages and adds them to the
@@ -268,7 +268,7 @@ static void data_sample_timer_handler(struct k_timer *timer)
 	SEND_EVENT(app, APP_EVT_DATA_GET_ALL);
 }
 
-/* Message handler for APP_STATE_INIT. */
+/* Message handler for STATE_INIT. */
 static void on_state_init(struct app_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
@@ -292,13 +292,13 @@ static void on_state_init(struct app_msg_data *msg)
 				K_SECONDS(app_cfg.movt));
 		}
 
-		state_set(APP_STATE_RUNNING);
-		sub_state_set(app_cfg.act ? APP_SUB_STATE_ACTIVE_MODE :
-					    APP_SUB_STATE_PASSIVE_MODE);
+		state_set(STATE_RUNNING);
+		sub_state_set(app_cfg.act ? SUB_STATE_ACTIVE_MODE :
+					    SUB_STATE_PASSIVE_MODE);
 	}
 }
 
-/* Message handler for APP_STATE_RUNNING. */
+/* Message handler for STATE_RUNNING. */
 static void on_state_running(struct app_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_DATE_TIME_OBTAINED)) {
@@ -310,7 +310,7 @@ static void on_state_running(struct app_msg_data *msg)
 	}
 }
 
-/* Message handler for APP_SUB_STATE_PASSIVE_MODE. */
+/* Message handler for SUB_STATE_PASSIVE_MODE. */
 void on_sub_state_passive(struct app_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
@@ -328,7 +328,7 @@ void on_sub_state_passive(struct app_msg_data *msg)
 				      K_SECONDS(app_cfg.actw),
 				      K_SECONDS(app_cfg.actw));
 			k_timer_stop(&movement_timeout_timer);
-			sub_state_set(APP_SUB_STATE_ACTIVE_MODE);
+			sub_state_set(SUB_STATE_ACTIVE_MODE);
 			return;
 		}
 
@@ -362,7 +362,7 @@ void on_sub_state_passive(struct app_msg_data *msg)
 	}
 }
 
-/* Message handler for APP_SUB_STATE_ACTIVE_MODE. */
+/* Message handler for SUB_STATE_ACTIVE_MODE. */
 static void on_sub_state_active(struct app_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
@@ -380,7 +380,7 @@ static void on_sub_state_active(struct app_msg_data *msg)
 				      K_SECONDS(app_cfg.movt),
 				      K_SECONDS(app_cfg.movt));
 			k_timer_stop(&data_sample_timer);
-			sub_state_set(APP_SUB_STATE_PASSIVE_MODE);
+			sub_state_set(SUB_STATE_PASSIVE_MODE);
 			return;
 		}
 
@@ -437,16 +437,16 @@ void main(void)
 	while (true) {
 		module_get_next_msg(&self, &msg);
 
-		switch (app_state) {
-		case APP_STATE_INIT:
+		switch (state) {
+		case STATE_INIT:
 			on_state_init(&msg);
 			break;
-		case APP_STATE_RUNNING:
-			switch (app_sub_state) {
-			case APP_SUB_STATE_ACTIVE_MODE:
+		case STATE_RUNNING:
+			switch (sub_state) {
+			case SUB_STATE_ACTIVE_MODE:
 				on_sub_state_active(&msg);
 				break;
-			case APP_SUB_STATE_PASSIVE_MODE:
+			case SUB_STATE_PASSIVE_MODE:
 				on_sub_state_passive(&msg);
 				break;
 			default:

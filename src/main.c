@@ -233,12 +233,13 @@ static void data_get_init(void)
 	struct app_module_event *app_module_event = new_app_module_event();
 
 	/* Specify which data that is to be included in the transmission. */
-	app_module_event->data_list[0] = APP_DATA_MODEM;
-	app_module_event->data_list[1] = APP_DATA_BATTERY;
-	app_module_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
+	app_module_event->data_list[0] = APP_DATA_MODEM_STATIC;
+	app_module_event->data_list[1] = APP_DATA_MODEM_DYNAMIC;
+	app_module_event->data_list[2] = APP_DATA_BATTERY;
+	app_module_event->data_list[3] = APP_DATA_ENVIRONMENTAL;
 
 	/* Set list count to number of data types passed in app_module_event. */
-	app_module_event->count = 3;
+	app_module_event->count = 4;
 	app_module_event->type = APP_EVT_DATA_GET;
 
 	/* Specify a timeout that each module has to fetch data. If data is not
@@ -254,7 +255,7 @@ static void data_get_all(void)
 	struct app_module_event *app_module_event = new_app_module_event();
 
 	/* Specify which data that is to be included in the transmission. */
-	app_module_event->data_list[0] = APP_DATA_MODEM;
+	app_module_event->data_list[0] = APP_DATA_MODEM_DYNAMIC;
 	app_module_event->data_list[1] = APP_DATA_BATTERY;
 	app_module_event->data_list[2] = APP_DATA_ENVIRONMENTAL;
 	app_module_event->data_list[3] = APP_DATA_GNSS;

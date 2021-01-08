@@ -67,7 +67,8 @@ enum app_module_event_type {
 enum app_module_data_type {
 	APP_DATA_ENVIRONMENTAL,
 	APP_DATA_MOVEMENT,
-	APP_DATA_MODEM,
+	APP_DATA_MODEM_STATIC,
+	APP_DATA_MODEM_DYNAMIC,
 	APP_DATA_BATTERY,
 	APP_DATA_GNSS,
 

@@ -27,7 +27,8 @@ enum modem_module_event_type {
 	MODEM_EVT_LTE_CELL_UPDATE,
 	MODEM_EVT_LTE_PSM_UPDATE,
 	MODEM_EVT_LTE_EDRX_UPDATE,
-	MODEM_EVT_MODEM_DATA_READY,
+	MODEM_EVT_MODEM_STATIC_DATA_READY,
+	MODEM_EVT_MODEM_DYNAMIC_DATA_READY,
 	MODEM_EVT_BATTERY_DATA_READY,
 	MODEM_EVT_SHUTDOWN_READY,
 	MODEM_EVT_ERROR
@@ -57,21 +58,25 @@ struct modem_module_edrx {
 	float ptw;
 };
 
-struct modem_module_modem_data {
+struct modem_module_static_modem_data {
 	int64_t timestamp;
-	uint16_t area_code;
-	uint16_t cell_id;
 	uint16_t band;
 	uint16_t nw_mode_gps;
 	uint16_t nw_mode_ltem;
 	uint16_t nw_mode_nbiot;
-	uint16_t rsrp;
-	char *ip_address;
-	char *mccmnc;
+	char *iccid;
 	char *app_version;
 	const char *board_version;
 	char *modem_fw;
-	char *iccid;
+};
+
+struct modem_module_dynamic_modem_data {
+	int64_t timestamp;
+	uint16_t area_code;
+	uint16_t cell_id;
+	uint16_t rsrp;
+	char *ip_address;
+	char *mccmnc;
 };
 
 struct modem_module_battery_data {
@@ -84,7 +89,8 @@ struct modem_module_event {
 	struct event_header header;
 	enum modem_module_event_type type;
 	union {
-		struct modem_module_modem_data modem;
+		struct modem_module_static_modem_data modem_static;
+		struct modem_module_dynamic_modem_data modem_dynamic;
 		struct modem_module_battery_data bat;
 		struct modem_module_cell cell;
 		struct modem_module_psm psm;

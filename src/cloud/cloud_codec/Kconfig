@@ -19,8 +19,8 @@ config SENSOR_BUFFER_MAX
 	int "Sensor data ringbuffer entries"
 	default 20
 
-config MODEM_BUFFER_MAX
-	int "Modem data ringbuffer entries"
+config MODEM_BUFFER_DYNAMIC_MAX
+	int "Dynamic modem data ringbuffer entries"
 	default 20
 
 config UI_BUFFER_MAX

@@ -176,9 +176,10 @@ void cloud_codec_populate_gps_buffer(struct cloud_data_gps *gps_buffer,
 		CONFIG_GPS_BUFFER_MAX - 1);
 }
 
-void cloud_codec_populate_modem_buffer(struct cloud_data_modem *modem_buffer,
-				      struct cloud_data_modem *new_modem_data,
-				      int *head_modem_buf)
+void cloud_codec_populate_modem_dynamic_buffer(
+				struct cloud_data_modem_dynamic *modem_buffer,
+				struct cloud_data_modem_dynamic *new_modem_data,
+				int *head_modem_buf)
 {
 	if (!new_modem_data->queued) {
 		return;
@@ -186,12 +187,12 @@ void cloud_codec_populate_modem_buffer(struct cloud_data_modem *modem_buffer,
 
 	/* Go to start of buffer if end is reached. */
 	*head_modem_buf += 1;
-	if (*head_modem_buf == CONFIG_MODEM_BUFFER_MAX) {
+	if (*head_modem_buf == CONFIG_MODEM_BUFFER_DYNAMIC_MAX) {
 		*head_modem_buf = 0;
 	}
 
 	modem_buffer[*head_modem_buf] = *new_modem_data;
 
-	LOG_DBG("Entry: %d of %d in modem buffer filled", *head_modem_buf,
-		CONFIG_MODEM_BUFFER_MAX - 1);
+	LOG_DBG("Entry: %d of %d in dynamic modem buffer filled",
+		*head_modem_buf, CONFIG_MODEM_BUFFER_DYNAMIC_MAX - 1);
 }

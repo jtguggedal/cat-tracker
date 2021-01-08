@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "cJSON.h"
-#include "cJSON_os.h"
 #include "json_aux.h"
 #include <date_time.h>
 
@@ -66,7 +65,8 @@ LOG_MODULE_REGISTER(cloud_codec, CONFIG_CLOUD_CODEC_LOG_LEVEL);
 #define DATA_GPS_HEADING	"hdg"
 
 /* Static functions */
-static int static_modem_data_add(cJSON *parent, struct cloud_data_modem *data)
+static int static_modem_data_add(cJSON *parent,
+				 struct cloud_data_modem_static *data)
 {
 	int err = 0;
 	char nw_mode[50];
@@ -80,7 +80,7 @@ static int static_modem_data_add(cJSON *parent, struct cloud_data_modem *data)
 		goto exit;
 	}
 
-	err = date_time_uptime_to_unix_time_ms(&data->mod_ts_static);
+	err = date_time_uptime_to_unix_time_ms(&data->ts);
 	if (err) {
 		LOG_ERR("date_time_uptime_to_unix_time_ms, error: %d", err);
 		return err;
@@ -112,7 +112,7 @@ static int static_modem_data_add(cJSON *parent, struct cloud_data_modem *data)
 	err += json_add_str(static_m_v, MODEM_BOARD, data->brdv);
 
 	err += json_add_obj(static_m, OBJECT_VALUE, static_m_v);
-	err += json_add_number(static_m, OBJECT_TIMESTAMP, data->mod_ts_static);
+	err += json_add_number(static_m, OBJECT_TIMESTAMP, data->ts);
 	err += json_add_obj(parent, DATA_MODEM_STATIC, static_m);
 
 	if (err) {
@@ -123,7 +123,8 @@ exit:
 	return 0;
 }
 
-static int dynamic_modem_data_add(cJSON *parent, struct cloud_data_modem *data,
+static int dynamic_modem_data_add(cJSON *parent,
+				  struct cloud_data_modem_dynamic *data,
 				  bool batch_entry)
 {
 	int err = 0;
@@ -134,7 +135,7 @@ static int dynamic_modem_data_add(cJSON *parent, struct cloud_data_modem *data,
 		goto exit;
 	}
 
-	err = date_time_uptime_to_unix_time_ms(&data->mod_ts);
+	err = date_time_uptime_to_unix_time_ms(&data->ts);
 	if (err) {
 		LOG_ERR("date_time_uptime_to_unix_time_ms, error: %d", err);
 		return err;
@@ -158,7 +159,7 @@ static int dynamic_modem_data_add(cJSON *parent, struct cloud_data_modem *data,
 	err += json_add_str(dynamic_m_v, MODEM_IP_ADDRESS, data->ip);
 
 	err += json_add_obj(dynamic_m, OBJECT_VALUE, dynamic_m_v);
-	err += json_add_number(dynamic_m, OBJECT_TIMESTAMP, data->mod_ts);
+	err += json_add_number(dynamic_m, OBJECT_TIMESTAMP, data->ts);
 
 	if (batch_entry) {
 		err += json_add_obj_array(parent, dynamic_m);
@@ -533,14 +534,14 @@ exit:
 int cloud_codec_encode_data(struct cloud_codec_data *output,
 			    struct cloud_data_gps *gps_buf,
 			    struct cloud_data_sensors *sensor_buf,
-			    struct cloud_data_modem *modem_buf,
+			    struct cloud_data_modem_static *modem_stat_buf,
+			    struct cloud_data_modem_dynamic *modem_dyn_buf,
 			    struct cloud_data_ui *ui_buf,
 			    struct cloud_data_accelerometer *mov_buf,
 			    struct cloud_data_battery *bat_buf)
 {
 	int err = 0;
 	char *buffer;
-	static bool initial_encode;
 	bool data_encoded = false;
 
 	cJSON *root_obj = cJSON_CreateObject();
@@ -555,16 +556,13 @@ int cloud_codec_encode_data(struct cloud_codec_data *output,
 		data_encoded = true;
 	}
 
-	if (modem_buf->queued) {
-		/* The first time modem data is sent to cloud upon a connection
-		 * we want to include static modem data.
-		 */
-		if (!initial_encode) {
-			err += static_modem_data_add(root_obj, modem_buf);
-				initial_encode = true;
-		}
+	if (modem_stat_buf->queued) {
+		err += static_modem_data_add(root_obj, modem_stat_buf);
+		data_encoded = true;
+	}
 
-		err += dynamic_modem_data_add(root_obj, modem_buf, false);
+	if (modem_dyn_buf->queued) {
+		err += dynamic_modem_data_add(root_obj, modem_dyn_buf, false);
 		data_encoded = true;
 	}
 
@@ -647,19 +645,20 @@ exit:
 	return err;
 }
 
-int cloud_codec_encode_batch_data(struct cloud_codec_data *output,
-				  struct cloud_data_gps *gps_buf,
-				  struct cloud_data_sensors *sensor_buf,
-				  struct cloud_data_modem *modem_buf,
-				  struct cloud_data_ui *ui_buf,
-				  struct cloud_data_accelerometer *accel_buf,
-				  struct cloud_data_battery *bat_buf,
-				  size_t gps_buf_count,
-				  size_t sensor_buf_count,
-				  size_t modem_buf_count,
-				  size_t ui_buf_count,
-				  size_t accel_buf_count,
-				  size_t bat_buf_count)
+int cloud_codec_encode_batch_data(
+				struct cloud_codec_data *output,
+				struct cloud_data_gps *gps_buf,
+				struct cloud_data_sensors *sensor_buf,
+				struct cloud_data_modem_dynamic *modem_dyn_buf,
+				struct cloud_data_ui *ui_buf,
+				struct cloud_data_accelerometer *accel_buf,
+				struct cloud_data_battery *bat_buf,
+				size_t gps_buf_count,
+				size_t sensor_buf_count,
+				size_t modem_dyn_buf_count,
+				size_t ui_buf_count,
+				size_t accel_buf_count,
+				size_t bat_buf_count)
 {
 	int err = 0;
 	char *buffer;
@@ -761,10 +760,10 @@ int cloud_codec_encode_batch_data(struct cloud_codec_data *output,
 	}
 
 	/* Dynamic modem data */
-	for (int i = 0; i < modem_buf_count; i++) {
-		if (modem_buf[i].queued) {
+	for (int i = 0; i < modem_dyn_buf_count; i++) {
+		if (modem_dyn_buf[i].queued) {
 			err += dynamic_modem_data_add(modem_obj,
-						     &modem_buf[i],
+						     &modem_dyn_buf[i],
 						     true);
 		}
 	}

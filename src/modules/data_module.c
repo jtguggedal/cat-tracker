@@ -64,15 +64,22 @@ static struct module_data self = {
  */
 static struct cloud_data_gps gps_buf[CONFIG_GPS_BUFFER_MAX];
 static struct cloud_data_sensors sensors_buf[CONFIG_SENSOR_BUFFER_MAX];
-static struct cloud_data_modem modem_buf[CONFIG_MODEM_BUFFER_MAX];
 static struct cloud_data_ui ui_buf[CONFIG_UI_BUFFER_MAX];
 static struct cloud_data_accelerometer accel_buf[CONFIG_ACCEL_BUFFER_MAX];
 static struct cloud_data_battery bat_buf[CONFIG_BAT_BUFFER_MAX];
 
+static struct cloud_data_modem_dynamic
+			modem_dyn_buf[CONFIG_MODEM_BUFFER_DYNAMIC_MAX];
+
+/* Static modem data does not change between firmware versions and does not
+ * have to be buffered.
+ */
+static struct cloud_data_modem_static modem_stat;
+
 /* Head of ringbuffers. */
 static int head_gps_buf;
 static int head_sensor_buf;
-static int head_modem_buf;
+static int head_modem_dyn_buf;
 static int head_ui_buf;
 static int head_accel_buf;
 static int head_bat_buf;
@@ -297,7 +304,8 @@ static void data_send(void)
 		&codec,
 		&gps_buf[head_gps_buf],
 		&sensors_buf[head_sensor_buf],
-		&modem_buf[head_modem_buf],
+		&modem_stat,
+		&modem_dyn_buf[head_modem_dyn_buf],
 		&ui_buf[head_ui_buf],
 		&accel_buf[head_accel_buf],
 		&bat_buf[head_bat_buf]);
@@ -332,13 +340,13 @@ static void data_send(void)
 	err = cloud_codec_encode_batch_data(&codec,
 					gps_buf,
 					sensors_buf,
-					modem_buf,
+					modem_dyn_buf,
 					ui_buf,
 					accel_buf,
 					bat_buf,
 					ARRAY_SIZE(gps_buf),
 					ARRAY_SIZE(sensors_buf),
-					ARRAY_SIZE(modem_buf),
+					ARRAY_SIZE(modem_dyn_buf),
 					ARRAY_SIZE(ui_buf),
 					ARRAY_SIZE(accel_buf),
 					ARRAY_SIZE(bat_buf));
@@ -703,29 +711,44 @@ static void on_all_states(struct data_msg_data *msg)
 		return;
 	}
 
-	if (IS_EVENT(msg, modem, MODEM_EVT_MODEM_DATA_READY)) {
-		struct cloud_data_modem new_modem_data = {
-			.appv = msg->module.modem.data.modem.app_version,
-			.area = msg->module.modem.data.modem.area_code,
-			.bnd = msg->module.modem.data.modem.band,
-			.brdv = msg->module.modem.data.modem.board_version,
-			.cell = msg->module.modem.data.modem.cell_id,
-			.fw = msg->module.modem.data.modem.modem_fw,
-			.iccid = msg->module.modem.data.modem.iccid,
-			.ip = msg->module.modem.data.modem.ip_address,
-			.mccmnc = msg->module.modem.data.modem.mccmnc,
-			.mod_ts = msg->module.modem.data.modem.timestamp,
-			.nw_gps = msg->module.modem.data.modem.nw_mode_gps,
-			.nw_lte_m = msg->module.modem.data.modem.nw_mode_ltem,
-			.nw_nb_iot = msg->module.modem.data.modem.nw_mode_nbiot,
-			.rsrp = msg->module.modem.data.modem.rsrp,
+	if (IS_EVENT(msg, modem, MODEM_EVT_MODEM_STATIC_DATA_READY)) {
+		modem_stat.appv =
+			msg->module.modem.data.modem_static.app_version;
+
+		modem_stat.brdv =
+			msg->module.modem.data.modem_static.board_version;
+
+		modem_stat.nw_lte_m =
+			msg->module.modem.data.modem_static.nw_mode_ltem;
+
+		modem_stat.nw_nb_iot =
+			msg->module.modem.data.modem_static.nw_mode_nbiot;
+
+		modem_stat.bnd = msg->module.modem.data.modem_static.band;
+		modem_stat.fw = msg->module.modem.data.modem_static.modem_fw;
+		modem_stat.iccid = msg->module.modem.data.modem_static.iccid;
+		modem_stat.ts = msg->module.modem.data.modem_static.timestamp;
+		modem_stat.queued = true;
+
+		data_status_set(APP_DATA_MODEM_STATIC);
+	}
+
+	if (IS_EVENT(msg, modem, MODEM_EVT_MODEM_DYNAMIC_DATA_READY)) {
+		struct cloud_data_modem_dynamic new_modem_data = {
+			.area = msg->module.modem.data.modem_dynamic.area_code,
+			.cell = msg->module.modem.data.modem_dynamic.cell_id,
+			.ip = msg->module.modem.data.modem_dynamic.ip_address,
+			.mccmnc = msg->module.modem.data.modem_dynamic.mccmnc,
+			.rsrp = msg->module.modem.data.modem_dynamic.rsrp,
+			.ts = msg->module.modem.data.modem_dynamic.timestamp,
 			.queued = true
 		};
 
-		cloud_codec_populate_modem_buffer(modem_buf, &new_modem_data,
-						  &head_modem_buf);
+		cloud_codec_populate_modem_dynamic_buffer(modem_dyn_buf,
+							  &new_modem_data,
+							  &head_modem_dyn_buf);
 
-		data_status_set(APP_DATA_MODEM);
+		data_status_set(APP_DATA_MODEM_DYNAMIC);
 	}
 
 	if (IS_EVENT(msg, modem, MODEM_EVT_BATTERY_DATA_READY)) {

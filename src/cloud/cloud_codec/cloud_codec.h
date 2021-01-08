@@ -35,7 +35,7 @@ struct cloud_data_battery {
 	uint16_t bat;
 	/** Battery data timestamp. UNIX milliseconds. */
 	int64_t bat_ts;
-	/** Flag signifying that the data entry is to be published. */
+	/** Flag signifying that the data entry is to be encoded. */
 	bool queued;
 };
 
@@ -55,7 +55,7 @@ struct cloud_data_gps {
 	float spd;
 	/** Heading of movement in degrees. */
 	float hdg;
-	/** Flag signifying that the data entry is to be published. */
+	/** Flag signifying that the data entry is to be encoded. */
 	bool queued;
 };
 
@@ -90,17 +90,13 @@ struct cloud_data_sensors {
 	double temp;
 	/** Humidity level in percentage */
 	double hum;
-	/** Flag signifying that the data entry is to be published. */
+	/** Flag signifying that the data entry is to be encoded. */
 	bool queued;
 };
 
-struct cloud_data_modem {
-	/** Modem data timestamp. UNIX milliseconds. */
-	int64_t mod_ts;
-	/** Area code. */
-	uint16_t area;
-	/** Cell id. */
-	uint16_t cell;
+struct cloud_data_modem_static {
+	/** Static modem data timestamp. UNIX milliseconds. */
+	int64_t ts;
 	/** Band number. */
 	uint16_t bnd;
 	/** Network mode GPS. */
@@ -109,21 +105,32 @@ struct cloud_data_modem {
 	uint16_t nw_lte_m;
 	/** Network mode NB-IoT. */
 	uint16_t nw_nb_iot;
-	/** Reference Signal Received Power. */
-	uint16_t rsrp;
-	/** Internet Protocol Address. */
-	char *ip;
-	/* Mobile Country Code*/
-	char *mccmnc;
+	/** Integrated Circuit Card Identifier. */
+	char *iccid;
 	/** Application version and Mobile Network Code. */
 	char *appv;
 	/** Device board version. */
 	const char *brdv;
 	/** Modem firmware. */
 	char *fw;
-	/** Integrated Circuit Card Identifier. */
-	char *iccid;
-	/** Flag signifying that the data entry is to be published. */
+	/** Flag signifying that the data entry is to be encoded. */
+	bool queued;
+};
+
+struct cloud_data_modem_dynamic {
+	/** Dynamic modem data timestamp. UNIX milliseconds. */
+	int64_t ts;
+	/** Area code. */
+	uint16_t area;
+	/** Cell id. */
+	uint16_t cell;
+	/** Reference Signal Received Power. */
+	uint16_t rsrp;
+	/** Internet Protocol Address. */
+	char *ip;
+	/* Mobile Country Code*/
+	char *mccmnc;
+	/** Flag signifying that the data entry is to be encoded. */
 	bool queued;
 };
 
@@ -132,7 +139,7 @@ struct cloud_data_ui {
 	int btn;
 	/** Button data timestamp. UNIX milliseconds. */
 	int64_t btn_ts;
-	/** Flag signifying that the data entry is to be published. */
+	/** Flag signifying that the data entry is to be encoded. */
 	bool queued;
 };
 
@@ -156,7 +163,8 @@ int cloud_codec_encode_config(struct cloud_codec_data *output,
 int cloud_codec_encode_data(struct cloud_codec_data *output,
 			    struct cloud_data_gps *gps_buf,
 			    struct cloud_data_sensors *sensor_buf,
-			    struct cloud_data_modem *modem_buf,
+			    struct cloud_data_modem_static *modem_stat_buf,
+			    struct cloud_data_modem_dynamic *modem_dyn_buf,
 			    struct cloud_data_ui *ui_buf,
 			    struct cloud_data_accelerometer *accel_buf,
 			    struct cloud_data_battery *bat_buf);
@@ -164,19 +172,20 @@ int cloud_codec_encode_data(struct cloud_codec_data *output,
 int cloud_codec_encode_ui_data(struct cloud_codec_data *output,
 			       struct cloud_data_ui *ui_buf);
 
-int cloud_codec_encode_batch_data(struct cloud_codec_data *output,
-				  struct cloud_data_gps *gps_buf,
-				  struct cloud_data_sensors *sensor_buf,
-				  struct cloud_data_modem *modem_buf,
-				  struct cloud_data_ui *ui_buf,
-				  struct cloud_data_accelerometer *accel_buf,
-				  struct cloud_data_battery *bat_buf,
-				  size_t gps_buf_count,
-				  size_t sensor_buf_count,
-				  size_t modem_buf_count,
-				  size_t ui_buf_count,
-				  size_t accel_buf_count,
-				  size_t bat_buf_count);
+int cloud_codec_encode_batch_data(
+				struct cloud_codec_data *output,
+				struct cloud_data_gps *gps_buf,
+				struct cloud_data_sensors *sensor_buf,
+				struct cloud_data_modem_dynamic *modem_dyn_buf,
+				struct cloud_data_ui *ui_buf,
+				struct cloud_data_accelerometer *accel_buf,
+				struct cloud_data_battery *bat_buf,
+				size_t gps_buf_count,
+				size_t sensor_buf_count,
+				size_t modem_dyn_buf_count,
+				size_t ui_buf_count,
+				size_t accel_buf_count,
+				size_t bat_buf_count);
 
 void cloud_codec_populate_sensor_buffer(
 				struct cloud_data_sensors *sensor_buffer,
@@ -200,9 +209,10 @@ void cloud_codec_populate_gps_buffer(struct cloud_data_gps *gps_buffer,
 				     struct cloud_data_gps *new_gps_data,
 				     int *head_gps_buf);
 
-void cloud_codec_populate_modem_buffer(struct cloud_data_modem *modem_buffer,
-				       struct cloud_data_modem *new_modem_data,
-				       int *head_modem_buf);
+void cloud_codec_populate_modem_dynamic_buffer(
+				struct cloud_data_modem_dynamic *modem_buffer,
+				struct cloud_data_modem_dynamic *new_modem_data,
+				int *head_modem_buf);
 
 static inline void cloud_codec_release_data(struct cloud_codec_data *output)
 {

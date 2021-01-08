@@ -238,7 +238,7 @@ static void check_modem_fw_version(void)
 	modem_fw_version_checked = true;
 }
 
-static int modem_data_get(void)
+static int static_modem_data_get(void)
 {
 	int err;
 
@@ -254,45 +254,94 @@ static int modem_data_get(void)
 	struct modem_module_event *modem_module_event =
 			new_modem_module_event();
 
-	modem_module_event->data.modem.rsrp =
-			rsrp_value_latest;
-	modem_module_event->data.modem.ip_address =
-			modem_param.network.ip_address.value_string;
-	modem_module_event->data.modem.cell_id =
-			modem_param.network.cellid_dec;
-	modem_module_event->data.modem.mccmnc =
-		modem_param.network.current_operator.value_string;
-	modem_module_event->data.modem.area_code =
-			modem_param.network.area_code.value;
-	modem_module_event->data.modem.app_version =
+	modem_module_event->data.modem_static.app_version =
 			CONFIG_CAT_TRACKER_APP_VERSION;
-	modem_module_event->data.modem.board_version =
+
+	modem_module_event->data.modem_static.board_version =
 			modem_param.device.board;
-	modem_module_event->data.modem.modem_fw =
-		modem_param.device.modem_fw.value_string;
-	modem_module_event->data.modem.iccid =
+
+	modem_module_event->data.modem_static.modem_fw =
+			modem_param.device.modem_fw.value_string;
+
+	modem_module_event->data.modem_static.iccid =
 			modem_param.sim.iccid.value_string;
-	modem_module_event->data.modem.nw_mode_ltem =
-		modem_param.network.lte_mode.value;
-	modem_module_event->data.modem.nw_mode_nbiot =
-		modem_param.network.nbiot_mode.value;
-	modem_module_event->data.modem.nw_mode_gps =
+
+	modem_module_event->data.modem_static.nw_mode_ltem =
+			modem_param.network.lte_mode.value;
+
+	modem_module_event->data.modem_static.nw_mode_nbiot =
+			modem_param.network.nbiot_mode.value;
+
+	modem_module_event->data.modem_static.nw_mode_gps =
 			modem_param.network.gps_mode.value;
-	modem_module_event->data.modem.band =
-		modem_param.network.current_band.value;
-	modem_module_event->data.modem.timestamp = k_uptime_get();
-	modem_module_event->type = MODEM_EVT_MODEM_DATA_READY;
+
+	modem_module_event->data.modem_static.band =
+			modem_param.network.current_band.value;
+
+	modem_module_event->data.modem_static.timestamp = k_uptime_get();
+
+	modem_module_event->type = MODEM_EVT_MODEM_STATIC_DATA_READY;
 
 	EVENT_SUBMIT(modem_module_event);
 
 	return 0;
 }
 
-static bool modem_data_requested(enum app_module_data_type *data_list,
-				size_t count)
+static int dynamic_modem_data_get(void)
+{
+	int err;
+
+	/* Request data from modem information module. */
+	err = modem_info_params_get(&modem_param);
+	if (err) {
+		LOG_ERR("modem_info_params_get, error: %d", err);
+		return err;
+	}
+
+	struct modem_module_event *modem_module_event =
+			new_modem_module_event();
+
+	modem_module_event->data.modem_dynamic.rsrp =
+			rsrp_value_latest;
+
+	modem_module_event->data.modem_dynamic.ip_address =
+			modem_param.network.ip_address.value_string;
+
+	modem_module_event->data.modem_dynamic.cell_id =
+			modem_param.network.cellid_dec;
+
+	modem_module_event->data.modem_dynamic.mccmnc =
+			modem_param.network.current_operator.value_string;
+
+	modem_module_event->data.modem_dynamic.area_code =
+			modem_param.network.area_code.value;
+
+	modem_module_event->data.modem_dynamic.timestamp = k_uptime_get();
+
+	modem_module_event->type = MODEM_EVT_MODEM_DYNAMIC_DATA_READY;
+
+	EVENT_SUBMIT(modem_module_event);
+
+	return 0;
+}
+
+static bool static_modem_data_requested(enum app_module_data_type *data_list,
+					size_t count)
 {
 	for (size_t i = 0; i < count; i++) {
-		if (data_list[i] == APP_DATA_MODEM) {
+		if (data_list[i] == APP_DATA_MODEM_STATIC) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool dynamic_modem_data_requested(enum app_module_data_type *data_list,
+					 size_t count)
+{
+	for (size_t i = 0; i < count; i++) {
+		if (data_list[i] == APP_DATA_MODEM_DYNAMIC) {
 			return true;
 		}
 	}
@@ -520,12 +569,23 @@ static void on_all_states(struct modem_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, app, APP_EVT_DATA_GET)) {
-		if (modem_data_requested(msg->module.app.data_list,
-					 msg->module.app.count)) {
+		if (static_modem_data_requested(msg->module.app.data_list,
+						msg->module.app.count)) {
 
 			int err;
 
-			err = modem_data_get();
+			err = static_modem_data_get();
+			if (err) {
+				SEND_ERROR(modem, MODEM_EVT_ERROR, err);
+			}
+		}
+
+		if (dynamic_modem_data_requested(msg->module.app.data_list,
+						 msg->module.app.count)) {
+
+			int err;
+
+			err = dynamic_modem_data_get();
 			if (err) {
 				SEND_ERROR(modem, MODEM_EVT_ERROR, err);
 			}

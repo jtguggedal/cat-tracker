@@ -15,8 +15,10 @@ static char *type2str(enum app_module_data_type type)
 		return "ENV";
 	case APP_DATA_MOVEMENT:
 		return "MOVE";
-	case APP_DATA_MODEM:
-		return "MODEM";
+	case APP_DATA_MODEM_STATIC:
+		return "MOD_STAT";
+	case APP_DATA_MODEM_DYNAMIC:
+		return "MOD_DYN";
 	case APP_DATA_BATTERY:
 		return "BAT";
 	case APP_DATA_GNSS:

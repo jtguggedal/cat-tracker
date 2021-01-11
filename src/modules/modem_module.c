@@ -576,7 +576,8 @@ static void on_all_states(struct modem_msg_data *msg)
 
 			err = static_modem_data_get();
 			if (err) {
-				SEND_ERROR(modem, MODEM_EVT_ERROR, err);
+				SEND_EVENT(modem,
+					MODEM_EVT_MODEM_STATIC_DATA_NOT_READY);
 			}
 		}
 
@@ -587,7 +588,8 @@ static void on_all_states(struct modem_msg_data *msg)
 
 			err = dynamic_modem_data_get();
 			if (err) {
-				SEND_ERROR(modem, MODEM_EVT_ERROR, err);
+				SEND_EVENT(modem,
+					MODEM_EVT_MODEM_DYNAMIC_DATA_NOT_READY);
 			}
 		}
 
@@ -598,7 +600,8 @@ static void on_all_states(struct modem_msg_data *msg)
 
 			err = battery_data_get();
 			if (err) {
-				SEND_ERROR(modem, MODEM_EVT_ERROR, err);
+				SEND_EVENT(modem,
+					MODEM_EVT_BATTERY_DATA_NOT_READY);
 			}
 		}
 	}

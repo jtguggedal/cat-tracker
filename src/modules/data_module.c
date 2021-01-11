@@ -33,7 +33,7 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_DATA_MODULE_LOG_LEVEL);
 #define DEFAULT_ACTIVE_TIMEOUT_SECONDS		120
 #define DEFAULT_PASSIVE_TIMEOUT_SECONDS		120
 #define DEFAULT_MOVEMENT_TIMEOUT_SECONDS	3600
-#define DEFAULT_ACCELEROMETER_THRESHOLD		100
+#define DEFAULT_ACCELEROMETER_THRESHOLD		10
 #define DEFAULT_GPS_TIMEOUT_SECONDS		60
 #define DEFAULT_DEVICE_MODE			true
 
@@ -641,7 +641,8 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 
 		if (current_cfg.acct != new.acct && new.acct != 0) {
 			current_cfg.acct = new.acct;
-			LOG_WRN("New Movement threshold: %d", current_cfg.acct);
+			LOG_WRN("New Movement threshold: %f",
+				current_cfg.acct);
 
 			config_change = true;
 		}
@@ -711,19 +712,19 @@ static void on_all_states(struct data_msg_data *msg)
 		return;
 	}
 
+	if (IS_EVENT(msg, modem, MODEM_EVT_MODEM_STATIC_DATA_NOT_READY)) {
+		data_status_set(APP_DATA_MODEM_STATIC);
+	}
+
 	if (IS_EVENT(msg, modem, MODEM_EVT_MODEM_STATIC_DATA_READY)) {
 		modem_stat.appv =
 			msg->module.modem.data.modem_static.app_version;
-
 		modem_stat.brdv =
 			msg->module.modem.data.modem_static.board_version;
-
 		modem_stat.nw_lte_m =
 			msg->module.modem.data.modem_static.nw_mode_ltem;
-
 		modem_stat.nw_nb_iot =
 			msg->module.modem.data.modem_static.nw_mode_nbiot;
-
 		modem_stat.bnd = msg->module.modem.data.modem_static.band;
 		modem_stat.fw = msg->module.modem.data.modem_static.modem_fw;
 		modem_stat.iccid = msg->module.modem.data.modem_static.iccid;
@@ -731,6 +732,10 @@ static void on_all_states(struct data_msg_data *msg)
 		modem_stat.queued = true;
 
 		data_status_set(APP_DATA_MODEM_STATIC);
+	}
+
+	if (IS_EVENT(msg, modem, MODEM_EVT_MODEM_DYNAMIC_DATA_NOT_READY)) {
+		data_status_set(APP_DATA_MODEM_DYNAMIC);
 	}
 
 	if (IS_EVENT(msg, modem, MODEM_EVT_MODEM_DYNAMIC_DATA_READY)) {
@@ -749,6 +754,10 @@ static void on_all_states(struct data_msg_data *msg)
 							  &head_modem_dyn_buf);
 
 		data_status_set(APP_DATA_MODEM_DYNAMIC);
+	}
+
+	if (IS_EVENT(msg, modem, MODEM_EVT_BATTERY_DATA_NOT_READY)) {
+		data_status_set(APP_DATA_BATTERY);
 	}
 
 	if (IS_EVENT(msg, modem, MODEM_EVT_BATTERY_DATA_READY)) {

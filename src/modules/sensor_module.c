@@ -74,30 +74,16 @@ static void state_set(enum state_type new_state)
 #if defined(CONFIG_EXTERNAL_SENSORS)
 static void movement_data_send(const struct ext_sensor_evt *const acc_data)
 {
-	static int buf_entry_try_again_timeout;
+	struct sensor_module_event *sensor_module_event =
+			new_sensor_module_event();
 
-	/* Only populate accelerometer buffer if a configurable amount of time
-	 * has passed since the last accelerometer buffer entry was filled.
-	 */
-	if (k_uptime_get() - buf_entry_try_again_timeout >
-	    1000 * CONFIG_TIME_BETWEEN_ACCELEROMETER_BUFFER_STORE_SEC) {
+	sensor_module_event->data.accel.values[0] = acc_data->value_array[0];
+	sensor_module_event->data.accel.values[1] = acc_data->value_array[1];
+	sensor_module_event->data.accel.values[2] = acc_data->value_array[2];
+	sensor_module_event->data.accel.timestamp = k_uptime_get();
+	sensor_module_event->type = SENSOR_EVT_MOVEMENT_DATA_READY;
 
-		struct sensor_module_event *sensor_module_event =
-				new_sensor_module_event();
-
-		sensor_module_event->data.accel.values[0] =
-				acc_data->value_array[0];
-		sensor_module_event->data.accel.values[1] =
-				acc_data->value_array[1];
-		sensor_module_event->data.accel.values[2] =
-				acc_data->value_array[2];
-		sensor_module_event->data.accel.timestamp = k_uptime_get();
-		sensor_module_event->type = SENSOR_EVT_MOVEMENT_DATA_READY;
-
-		EVENT_SUBMIT(sensor_module_event);
-
-		buf_entry_try_again_timeout = k_uptime_get();
-	}
+	EVENT_SUBMIT(sensor_module_event);
 }
 
 static void ext_sensor_handler(const struct ext_sensor_evt *const evt)
@@ -219,9 +205,16 @@ static void on_state_init(struct sensor_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
 #if defined(CONFIG_EXTERNAL_SENSORS)
-		int movement_threshold = msg->module.data.data.cfg.acct;
+		double movement_threshold = msg->module.data.data.cfg.acct;
+		int err;
 
-		ext_sensors_mov_thres_set(movement_threshold);
+		err = ext_sensors_mov_thres_set(movement_threshold);
+		if (err == -ENOTSUP) {
+			LOG_WRN("Passed in threshold value not valid");
+		} else if (err) {
+			LOG_ERR("Failed to set threshold, error: %d", err);
+			SEND_ERROR(sensor, SENSOR_EVT_ERROR, err);
+		}
 #endif
 		state_set(STATE_RUNNING);
 	}
@@ -233,8 +226,15 @@ static void on_state_running(struct sensor_msg_data *msg)
 
 #if defined(CONFIG_EXTERNAL_SENSORS)
 		int movement_threshold = msg->module.data.data.cfg.acct;
+		int err;
 
-		ext_sensors_mov_thres_set(movement_threshold);
+		err = ext_sensors_mov_thres_set(movement_threshold);
+		if (err == -ENOTSUP) {
+			LOG_WRN("Passed in threshold value not valid");
+		} else if (err) {
+			LOG_ERR("Failed to set threshold, error: %d", err);
+			SEND_ERROR(sensor, SENSOR_EVT_ERROR, err);
+		}
 #endif
 	}
 

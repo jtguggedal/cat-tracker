@@ -70,8 +70,8 @@ struct cloud_data_cfg {
 	int pasw;
 	/** Time between cloud publications regardless of mode. */
 	int movt;
-	/** Accelerometer trigger threshold value. */
-	int acct;
+	/** Accelerometer trigger threshold value in m/s2. */
+	double acct;
 };
 
 struct cloud_data_accelerometer {

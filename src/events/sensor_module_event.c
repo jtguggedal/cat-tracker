@@ -17,7 +17,11 @@ static int log_sensor_module_event(const struct event_header *eh, char *buf,
 	switch (event->type) {
 	case SENSOR_EVT_MOVEMENT_DATA_READY:
 		strcpy(event_name, "SENSOR_EVT_MOVEMENT_DATA_READY");
-		break;
+		return snprintf(buf, buf_len, "%s - X: %f, Y: %f, Z: %f",
+				event_name,
+				event->data.accel.values[0],
+				event->data.accel.values[1],
+				event->data.accel.values[2]);
 	case SENSOR_EVT_ENVIRONMENTAL_DATA_READY:
 		strcpy(event_name, "SENSOR_EVT_ENVIRONMENTAL_DATA_READY");
 		break;

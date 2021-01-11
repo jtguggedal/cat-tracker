@@ -62,29 +62,30 @@ int ext_sensors_init(ext_sensor_handler_t handler);
 /**
  * @brief Get temperature from library.
  *
- * @param[out] cloud_data Pointer to structure containing cloud data.
+ * @param[out] temp Pointer to variable containing temperature in celcius.
  *
  * @return 0 on success or negative error value on failure.
  */
-int ext_sensors_temperature_get(double *ext_temp);
+int ext_sensors_temperature_get(double *temp);
 
 /**
  * @brief Get humidity from library.
  *
- * @param[out] cloud_data Pointer to structure containing cloud data.
+ * @param[out] humid Pointer to variable containing humidity in percentage.
  *
  * @return 0 on success or negative error value on failure.
  */
-int ext_sensors_humidity_get(double *ext_hum);
+int ext_sensors_humidity_get(double *humid);
 
 /**
  * @brief Set the threshold that triggeres callback on accelerometer data.
  *
- * @param[in] cloud_data Pointer to structure containing cloud data.
+ * @param[in] threshold_new Variable that sets the accelerometer threshold value
+ *			    in m/s2.
  *
  * @return 0 on success or negative error value on failure.
  */
-void ext_sensors_mov_thres_set(int acc_thresh);
+int ext_sensors_mov_thres_set(double threshold_new);
 
 #ifdef __cplusplus
 }

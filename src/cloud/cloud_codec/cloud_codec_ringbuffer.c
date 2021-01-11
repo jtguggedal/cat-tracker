@@ -56,84 +56,20 @@ void cloud_codec_populate_accel_buffer(
 				struct cloud_data_accelerometer *new_accel_data,
 				int *head_mov_buf)
 {
-	double buf_lowest_val = 0;
-	double buf_highest_val = 0;
-	double new_entry_highest_val = 0;
-	int64_t newest_time = 0;
-
 	if (!new_accel_data->queued) {
 		return;
 	}
 
-	/** Populate the next available unqueued entry. */
-	for (int k = 0; k < CONFIG_ACCEL_BUFFER_MAX; k++) {
-		if (!mov_buf[k].queued) {
-			*head_mov_buf = k;
-			goto populate_buffer;
-		}
+	/* Go to start of buffer if end is reached. */
+	*head_mov_buf += 1;
+	if (*head_mov_buf == CONFIG_ACCEL_BUFFER_MAX) {
+		*head_mov_buf = 0;
 	}
-
-	/* Set the initial value of buf_lowest_val to the highest in the
-	 * first accelerometer buffer entry.
-	 */
-	for (int j = 0; j < CONFIG_ACCEL_BUFFER_MAX; j++) {
-		for (int m = 0; m < ACCELEROMETER_TOTAL_AXIS; m++) {
-			if (buf_lowest_val < fabs(mov_buf[j].values[m])) {
-				buf_lowest_val = fabs(mov_buf[j].values[m]);
-			}
-		}
-	}
-
-	/* Find the lowest of the highest values in the current accelerometer
-	 * buffer.
-	 */
-	for (int j = 0; j < CONFIG_ACCEL_BUFFER_MAX; j++) {
-		for (int m = 0; m < ACCELEROMETER_TOTAL_AXIS; m++) {
-			if (buf_highest_val < fabs(mov_buf[j].values[m])) {
-				buf_highest_val = fabs(mov_buf[j].values[m]);
-			}
-		}
-
-		if (buf_highest_val < buf_lowest_val) {
-			buf_lowest_val = buf_highest_val;
-			*head_mov_buf = j;
-		}
-
-		buf_highest_val = 0;
-	}
-
-	/* Find the highest value in the new accelerometer buffer entry. */
-	for (int n = 0; n < ACCELEROMETER_TOTAL_AXIS; n++) {
-		if (new_entry_highest_val < fabs(new_accel_data->values[n])) {
-			new_entry_highest_val = fabs(new_accel_data->values[n]);
-		}
-	}
-
-	/* If the lowest of the highest accelerometer values in the current
-	 * buffer is higher than the new acceleromter data entry, do nothing.
-	 * If infact a value in the new accelerometer reading is higher,
-	 * replace it with the lowest of the highest values in the current
-	 * acceleromter buffer.
-	 */
-	if (buf_lowest_val > new_entry_highest_val) {
-		goto find_newest_entry;
-	}
-
-populate_buffer:
 
 	mov_buf[*head_mov_buf] = *new_accel_data;
 
-	LOG_DBG("Entry: %d of %d in accelerometer buffer filled",
-		*head_mov_buf, CONFIG_ACCEL_BUFFER_MAX - 1);
-
-find_newest_entry:
-	/* Always point head of buffer to the newest sampled value. */
-	for (int i = 0; i < CONFIG_ACCEL_BUFFER_MAX; i++) {
-		if (newest_time < mov_buf[i].ts && mov_buf[i].queued) {
-			newest_time = mov_buf[i].ts;
-			*head_mov_buf = i;
-		}
-	}
+	LOG_DBG("Entry: %d of %d in movement buffer filled", *head_mov_buf,
+		CONFIG_ACCEL_BUFFER_MAX - 1);
 }
 
 void cloud_codec_populate_bat_buffer(struct cloud_data_battery *bat_buffer,

@@ -35,12 +35,6 @@ config BAT_BUFFER_MAX
 	int "Battery data ringbuffer entries"
 	default 20
 
-config TIME_BETWEEN_ACCELEROMETER_BUFFER_STORE_SEC
-	int "Accelerometer data ringbuffer storage interval"
-	default 10
-	help
-	  How often a store can occur to the accelerometer ringbuffer.
-
 endif # CLOUD_CODEC
 
 module = CLOUD_CODEC

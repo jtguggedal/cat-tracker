@@ -483,7 +483,7 @@ get_data:
 	}
 
 	if (acc_thres != NULL) {
-		data->acct = acc_thres->valueint;
+		data->acct = acc_thres->valuedouble;
 	}
 
 exit:

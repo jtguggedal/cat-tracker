@@ -39,6 +39,15 @@ static int log_modem_module_event(const struct event_header *eh, char *buf,
 	case MODEM_EVT_MODEM_DYNAMIC_DATA_READY:
 		strcpy(event_name, "MODEM_EVT_MODEM_DYNAMIC_DATA_READY");
 		break;
+	case MODEM_EVT_MODEM_STATIC_DATA_NOT_READY:
+		strcpy(event_name, "MODEM_EVT_MODEM_STATIC_DATA_NOT_READY");
+		break;
+	case MODEM_EVT_MODEM_DYNAMIC_DATA_NOT_READY:
+		strcpy(event_name, "MODEM_EVT_MODEM_DYNAMIC_DATA_NOT_READY");
+		break;
+	case MODEM_EVT_BATTERY_DATA_NOT_READY:
+		strcpy(event_name, "MODEM_EVT_BATTERY_DATA_NOT_READY");
+		break;
 	case MODEM_EVT_BATTERY_DATA_READY:
 		strcpy(event_name, "MODEM_EVT_BATTERY_DATA_READY");
 		break;

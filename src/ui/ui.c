@@ -8,6 +8,7 @@
 
 #include "ui.h"
 #include "led_pwm.h"
+#include <device.h>
 
 LOG_MODULE_REGISTER(ui, CONFIG_UI_LOG_LEVEL);
 
@@ -78,8 +79,10 @@ enum ui_led_pattern ui_led_get_pattern(void)
 	return current_led_state;
 }
 
-int ui_init(void)
+static int ui_init(const struct device *dev)
 {
+	ARG_UNUSED(dev);
+
 	int err = 0;
 
 #ifdef CONFIG_UI_LED_USE_PWM
@@ -114,3 +117,5 @@ void ui_stop_leds(void)
 	ui_leds_stop();
 #endif
 }
+
+SYS_INIT(ui_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);

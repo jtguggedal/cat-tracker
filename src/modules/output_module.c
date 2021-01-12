@@ -38,31 +38,38 @@ struct output_msg_data {
 	} module;
 };
 
-/* Output module super states. */
+/* Output module states. */
 static enum state_type {
-	STATE_INIT,
-	STATE_RUNNING,
+	STATE_ACTIVE,
+	STATE_PASSIVE,
 	STATE_ERROR
 } state;
 
 /* Output module sub states. */
 static enum sub_state_type {
-	SUB_STATE_ACTIVE,
-	SUB_STATE_PASSIVE
+	SUB_STATE_GPS_INACTIVE,
+	SUB_STATE_GPS_ACTIVE
 } sub_state;
 
-/* Output module sub-sub states. */
-static enum sub_sub_state_type {
-	SUB_SUB_STATE_GPS_INACTIVE,
-	SUB_SUB_STATE_GPS_ACTIVE
-} sub_sub_state;
+/* Forward declarations */
+static void led_pat_active_work_fn(struct k_work *work);
+static void led_pat_passive_work_fn(struct k_work *work);
+static void led_pat_gps_work_fn(struct k_work *work);
 
 /* Delayed works that is used to make sure the device always reverts back to the
  * device mode or GPS search LED pattern.
  */
-static struct k_delayed_work led_pat_active_work;
-static struct k_delayed_work led_pat_passive_work;
-static struct k_delayed_work led_pat_gps_work;
+static struct k_delayed_work led_pat_active_work = {
+	.work = Z_WORK_INITIALIZER(led_pat_active_work_fn)
+};
+
+static struct k_delayed_work led_pat_passive_work = {
+	.work = Z_WORK_INITIALIZER(led_pat_passive_work_fn)
+};
+
+static struct k_delayed_work led_pat_gps_work = {
+	.work = Z_WORK_INITIALIZER(led_pat_gps_work_fn)
+};
 
 K_MSGQ_DEFINE(msgq_output, sizeof(struct output_msg_data), 10, 4);
 
@@ -71,10 +78,10 @@ static void message_handler(struct output_msg_data *msg);
 static char *state2str(enum state_type new_state)
 {
 	switch (new_state) {
-	case STATE_INIT:
-		return "STATE_INIT";
-	case STATE_RUNNING:
-		return "STATE_RUNNING";
+	case STATE_ACTIVE:
+		return "STATE_ACTIVE";
+	case STATE_PASSIVE:
+		return "STATE_PASSIVE";
 	case STATE_ERROR:
 		return "STATE_ERROR";
 	default:
@@ -85,22 +92,10 @@ static char *state2str(enum state_type new_state)
 static char *sub_state2str(enum sub_state_type new_state)
 {
 	switch (new_state) {
-	case SUB_STATE_ACTIVE:
-		return "SUB_STATE_ACTIVE";
-	case SUB_STATE_PASSIVE:
-		return "SUB_STATE_PASSIVE";
-	default:
-		return "Unknown";
-	}
-}
-
-static char *sub_sub_state2str(enum sub_sub_state_type new_state)
-{
-	switch (new_state) {
-	case SUB_SUB_STATE_GPS_INACTIVE:
-		return "SUB_SUB_STATE_GPS_INACTIVE";
-	case SUB_SUB_STATE_GPS_ACTIVE:
-		return "SUB_SUB_STATE_GPS_ACTIVE";
+	case SUB_STATE_GPS_INACTIVE:
+		return "SUB_STATE_GPS_INACTIVE";
+	case SUB_STATE_GPS_ACTIVE:
+		return "SUB_STATE_GPS_ACTIVE";
 	default:
 		return "Unknown";
 	}
@@ -132,34 +127,6 @@ static void sub_state_set(enum sub_state_type new_state)
 		log_strdup(sub_state2str(new_state)));
 
 	sub_state = new_state;
-}
-
-static void sub_sub_state_set(enum sub_sub_state_type new_state)
-{
-	if (new_state == sub_sub_state) {
-		LOG_DBG("Sub state: %s",
-			log_strdup(sub_sub_state2str(sub_sub_state)));
-		return;
-	}
-
-	LOG_DBG("Sub sub state transition %s --> %s",
-		log_strdup(sub_sub_state2str(sub_sub_state)),
-		log_strdup(sub_sub_state2str(new_state)));
-
-	sub_sub_state = new_state;
-}
-
-static int setup(void)
-{
-	int err;
-
-	err = ui_init();
-	if (err) {
-		LOG_ERR("ui_init, error: %d", err);
-		return err;
-	}
-
-	return 0;
 }
 
 static void led_pat_active_work_fn(struct k_work *work)
@@ -227,181 +194,102 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
-static void on_state_init(struct output_msg_data *output_msg)
+static void on_state_active_sub_state_gps_active(struct output_msg_data *msg)
 {
-	if (is_data_module_event(&output_msg->module.data.header) &&
-	    output_msg->module.data.type == DATA_EVT_CONFIG_INIT) {
-		state_set(STATE_RUNNING);
-		sub_state_set(output_msg->module.data.data.cfg.act ?
-			      SUB_STATE_ACTIVE :
-			      SUB_STATE_PASSIVE);
-	}
-}
-
-static void on_active_gps_active(struct output_msg_data *output_msg)
-{
-	if (is_gps_module_event(&output_msg->module.gps.header)) {
-		switch (output_msg->module.gps.type) {
-		case GPS_EVT_INACTIVE:
-			ui_led_set_pattern(UI_LED_ACTIVE_MODE);
-			sub_sub_state_set(SUB_SUB_STATE_GPS_INACTIVE);
-			break;
-		default:
-			break;
-		}
+	if (IS_EVENT(msg, gps, GPS_EVT_INACTIVE)) {
+		ui_led_set_pattern(UI_LED_ACTIVE_MODE);
+		sub_state_set(SUB_STATE_GPS_INACTIVE);
 	}
 
-	if (is_data_module_event(&output_msg->module.data.header)) {
-		switch (output_msg->module.data.type) {
-		case DATA_EVT_DATA_SEND:
-			/* Fall through. */
-		case DATA_EVT_UI_DATA_SEND:
-			ui_led_set_pattern(UI_CLOUD_PUBLISHING);
-			k_delayed_work_submit(&led_pat_gps_work, K_SECONDS(5));
-			break;
-		default:
-			break;
-		}
-	}
-}
-
-static void on_active_gps_inactive(struct output_msg_data *output_msg)
-{
-	if (is_gps_module_event(&output_msg->module.gps.header)) {
-		switch (output_msg->module.gps.type) {
-		case GPS_EVT_ACTIVE:
-			ui_led_set_pattern(UI_LED_GPS_SEARCHING);
-			sub_sub_state_set(SUB_SUB_STATE_GPS_ACTIVE);
-			break;
-		default:
-			break;
-		}
+	if ((IS_EVENT(msg, data, DATA_EVT_DATA_SEND)) ||
+	    (IS_EVENT(msg, data, DATA_EVT_UI_DATA_SEND))) {
+		ui_led_set_pattern(UI_CLOUD_PUBLISHING);
+		k_delayed_work_submit(&led_pat_gps_work, K_SECONDS(5));
 	}
 
-	if (is_data_module_event(&output_msg->module.data.header)) {
-		switch (output_msg->module.data.type) {
-		case DATA_EVT_DATA_SEND:
-			/* Fall through. */
-		case DATA_EVT_UI_DATA_SEND:
-			ui_led_set_pattern(UI_CLOUD_PUBLISHING);
-			k_delayed_work_submit(&led_pat_active_work,
+	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
+		if (!msg->module.data.data.cfg.act) {
+			state_set(STATE_PASSIVE);
+			k_delayed_work_submit(&led_pat_gps_work,
 					      K_SECONDS(5));
-			break;
-		default:
-			break;
 		}
 	}
 }
 
-static void on_passive_gps_active(struct output_msg_data *output_msg)
+static void on_state_active_sub_state_gps_inactive(struct output_msg_data *msg)
 {
-	if (is_gps_module_event(&output_msg->module.gps.header)) {
-		switch (output_msg->module.gps.type) {
-		case GPS_EVT_INACTIVE:
-			ui_led_set_pattern(UI_LED_PASSIVE_MODE);
-			sub_sub_state_set(SUB_SUB_STATE_GPS_INACTIVE);
-			break;
-		default:
-			break;
-		}
+	if (IS_EVENT(msg, gps, GPS_EVT_ACTIVE)) {
+		ui_led_set_pattern(UI_LED_GPS_SEARCHING);
+		sub_state_set(SUB_STATE_GPS_ACTIVE);
 	}
 
-	if (is_data_module_event(&output_msg->module.data.header)) {
-		switch (output_msg->module.data.type) {
-		case DATA_EVT_DATA_SEND:
-			/* Fall through. */
-		case DATA_EVT_UI_DATA_SEND:
-			ui_led_set_pattern(UI_CLOUD_PUBLISHING);
-			k_delayed_work_submit(&led_pat_gps_work, K_SECONDS(5));
-			break;
-		default:
-			break;
-		}
-	}
-}
-
-static void on_passive_gps_inactive(struct output_msg_data *output_msg)
-{
-	if (is_gps_module_event(&output_msg->module.gps.header)) {
-		switch (output_msg->module.gps.type) {
-		case GPS_EVT_ACTIVE:
-			ui_led_set_pattern(UI_LED_GPS_SEARCHING);
-			sub_sub_state_set(SUB_SUB_STATE_GPS_ACTIVE);
-			break;
-		default:
-			break;
-		}
+	if ((IS_EVENT(msg, data, DATA_EVT_DATA_SEND)) ||
+	    (IS_EVENT(msg, data, DATA_EVT_UI_DATA_SEND))) {
+		ui_led_set_pattern(UI_CLOUD_PUBLISHING);
+		k_delayed_work_submit(&led_pat_active_work, K_SECONDS(5));
 	}
 
-	if (is_data_module_event(&output_msg->module.data.header)) {
-		switch (output_msg->module.data.type) {
-		case DATA_EVT_DATA_SEND:
-			/* Fall through. */
-		case DATA_EVT_UI_DATA_SEND:
-			ui_led_set_pattern(UI_CLOUD_PUBLISHING);
+	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
+		if (!msg->module.data.data.cfg.act) {
+			state_set(STATE_PASSIVE);
 			k_delayed_work_submit(&led_pat_passive_work,
 					      K_SECONDS(5));
-			break;
-		default:
-			break;
 		}
 	}
 }
 
-static void on_sub_state_active(struct output_msg_data *output_msg)
+static void on_state_passive_sub_state_gps_active(struct output_msg_data *msg)
 {
-	if (is_data_module_event(&output_msg->module.data.header)) {
-		switch (output_msg->module.data.type) {
-		case DATA_EVT_CONFIG_READY:
-			if (!output_msg->module.data.data.cfg.act) {
-				sub_state_set(SUB_STATE_PASSIVE);
-			}
-			break;
-		default:
-			break;
-		}
+	if (IS_EVENT(msg, gps, GPS_EVT_INACTIVE)) {
+		ui_led_set_pattern(UI_LED_PASSIVE_MODE);
+		sub_state_set(SUB_STATE_GPS_INACTIVE);
 	}
-}
 
-static void on_sub_state_passive(struct output_msg_data *msg)
-{
+	if ((IS_EVENT(msg, data, DATA_EVT_DATA_SEND)) ||
+	    (IS_EVENT(msg, data, DATA_EVT_UI_DATA_SEND))) {
+		ui_led_set_pattern(UI_CLOUD_PUBLISHING);
+		k_delayed_work_submit(&led_pat_gps_work, K_SECONDS(5));
+	}
+
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
 		if (msg->module.data.data.cfg.act) {
-			sub_state_set(SUB_STATE_ACTIVE);
+			state_set(STATE_ACTIVE);
+			k_delayed_work_submit(&led_pat_gps_work,
+					      K_SECONDS(5));
 		}
 	}
 }
 
-static void on_state_running(struct output_msg_data *msg)
+static void on_state_passive_sub_state_gps_inactive(struct output_msg_data *msg)
 {
-	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTING)) {
-		ui_led_set_pattern(UI_LTE_CONNECTING);
+	if (IS_EVENT(msg, gps, GPS_EVT_ACTIVE)) {
+		ui_led_set_pattern(UI_LED_GPS_SEARCHING);
+		sub_state_set(SUB_STATE_GPS_ACTIVE);
+	}
+
+	if ((IS_EVENT(msg, data, DATA_EVT_DATA_SEND)) ||
+	    (IS_EVENT(msg, data, DATA_EVT_UI_DATA_SEND))) {
+		ui_led_set_pattern(UI_CLOUD_PUBLISHING);
+		k_delayed_work_submit(&led_pat_passive_work, K_SECONDS(5));
+	}
+
+	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
+		if (msg->module.data.data.cfg.act) {
+			state_set(STATE_ACTIVE);
+			k_delayed_work_submit(&led_pat_active_work,
+					      K_SECONDS(5));
+		}
 	}
 }
 
 static void on_all_states(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_EVT_START)) {
-		int err;
 
 		module_start(&self);
 
-		state_set(STATE_INIT);
-		sub_state_set(SUB_STATE_ACTIVE);
-		sub_sub_state_set(SUB_SUB_STATE_GPS_INACTIVE);
-
-		k_delayed_work_init(&led_pat_gps_work,
-					led_pat_gps_work_fn);
-		k_delayed_work_init(&led_pat_active_work,
-					led_pat_active_work_fn);
-		k_delayed_work_init(&led_pat_passive_work,
-					led_pat_passive_work_fn);
-
-		err = setup();
-		if (err) {
-			LOG_ERR("setup, error: %d", err);
-			SEND_ERROR(output, OUTPUT_EVT_ERROR, err);
-		}
+		state_set(STATE_ACTIVE);
+		sub_state_set(SUB_STATE_GPS_INACTIVE);
 	}
 
 	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {
@@ -411,49 +299,46 @@ static void on_all_states(struct output_msg_data *msg)
 
 		SEND_EVENT(output, OUTPUT_EVT_SHUTDOWN_READY);
 	}
+
+	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTING)) {
+		ui_led_set_pattern(UI_LTE_CONNECTING);
+	}
+
+	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
+		state_set(msg->module.data.data.cfg.act ?
+			 STATE_ACTIVE :
+			 STATE_PASSIVE);
+	}
 }
 
 static void message_handler(struct output_msg_data *msg)
 {
 	switch (state) {
-	case STATE_INIT:
-		on_state_init(msg);
-		break;
-	case STATE_RUNNING:
+	case STATE_ACTIVE:
 		switch (sub_state) {
-		case SUB_STATE_ACTIVE:
-			switch (sub_sub_state) {
-			case SUB_SUB_STATE_GPS_ACTIVE:
-				on_active_gps_active(msg);
-				break;
-			case SUB_SUB_STATE_GPS_INACTIVE:
-				on_active_gps_inactive(msg);
-				break;
-			default:
-				break;
-			}
-
-			on_sub_state_active(msg);
+		case SUB_STATE_GPS_ACTIVE:
+			on_state_active_sub_state_gps_active(msg);
 			break;
-		case SUB_STATE_PASSIVE:
-			switch (sub_sub_state) {
-			case SUB_SUB_STATE_GPS_ACTIVE:
-				on_passive_gps_active(msg);
-				break;
-			case SUB_SUB_STATE_GPS_INACTIVE:
-				on_passive_gps_inactive(msg);
-				break;
-			default:
-				break;
-			}
-
-			on_sub_state_passive(msg);
+		case SUB_STATE_GPS_INACTIVE:
+			on_state_active_sub_state_gps_inactive(msg);
 			break;
 		default:
 			LOG_WRN("Unknown output module sub state.");
 			break;
 		}
-		on_state_running(msg);
+		break;
+	case STATE_PASSIVE:
+		switch (sub_state) {
+		case SUB_STATE_GPS_ACTIVE:
+			on_state_passive_sub_state_gps_active(msg);
+			break;
+		case SUB_STATE_GPS_INACTIVE:
+			on_state_passive_sub_state_gps_inactive(msg);
+			break;
+		default:
+			LOG_WRN("Unknown output module sub state.");
+			break;
+		}
 		break;
 	case STATE_ERROR:
 		/* The error state has no transition. */

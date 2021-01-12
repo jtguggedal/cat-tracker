@@ -111,15 +111,6 @@ enum ui_led_pattern {
 };
 
 /**
- * @brief Initializes the user interface module.
- *
- * @param cb UI callback handler. Can be NULL to disable callbacks.
- *
- * @return 0 on success or negative error value on failure.
- */
-int ui_init(void);
-
-/**
  * @brief Sets the LED pattern.
  *
  * @param pattern LED pattern.

@@ -119,6 +119,8 @@ static int static_modem_data_add(cJSON *parent,
 		return err;
 	}
 
+	data->queued = false;
+
 exit:
 	return 0;
 }

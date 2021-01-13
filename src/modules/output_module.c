@@ -24,10 +24,6 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_OUTPUT_MODULE_LOG_LEVEL);
 
-static struct module_data self = {
-	.name = "output",
-};
-
 struct output_msg_data {
 	union {
 		struct app_module_event app;
@@ -71,10 +67,22 @@ static struct k_delayed_work led_pat_gps_work = {
 	.work = Z_WORK_INITIALIZER(led_pat_gps_work_fn)
 };
 
-K_MSGQ_DEFINE(msgq_output, sizeof(struct output_msg_data), 10, 4);
+/* Output module message queue. */
+#define OUTPUT_QUEUE_ENTRY_COUNT	10
+#define OUTPUT_QUEUE_BYTE_ALIGNMENT	4
 
+K_MSGQ_DEFINE(msgq_output, sizeof(struct output_msg_data),
+	      OUTPUT_QUEUE_ENTRY_COUNT, OUTPUT_QUEUE_BYTE_ALIGNMENT);
+
+static struct module_data self = {
+	.name = "output",
+	.msg_q = NULL,
+};
+
+/* Forward declarations. */
 static void message_handler(struct output_msg_data *msg);
 
+/* Convenience functions used in internal state handling. */
 static char *state2str(enum state_type new_state)
 {
 	switch (new_state) {
@@ -129,21 +137,7 @@ static void sub_state_set(enum sub_state_type new_state)
 	sub_state = new_state;
 }
 
-static void led_pat_active_work_fn(struct k_work *work)
-{
-	ui_led_set_pattern(UI_LED_ACTIVE_MODE);
-}
-
-static void led_pat_passive_work_fn(struct k_work *work)
-{
-	ui_led_set_pattern(UI_LED_PASSIVE_MODE);
-}
-
-static void led_pat_gps_work_fn(struct k_work *work)
-{
-	ui_led_set_pattern(UI_LED_GPS_SEARCHING);
-}
-
+/* Handlers */
 static bool event_handler(const struct event_header *eh)
 {
 	if (is_app_module_event(eh)) {
@@ -194,6 +188,23 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
+/* Static module functions. */
+static void led_pat_active_work_fn(struct k_work *work)
+{
+	ui_led_set_pattern(UI_LED_ACTIVE_MODE);
+}
+
+static void led_pat_passive_work_fn(struct k_work *work)
+{
+	ui_led_set_pattern(UI_LED_PASSIVE_MODE);
+}
+
+static void led_pat_gps_work_fn(struct k_work *work)
+{
+	ui_led_set_pattern(UI_LED_GPS_SEARCHING);
+}
+
+/* Message handler for SUB_STATE_GPS_ACTIVE in STATE_ACTIVE. */
 static void on_state_active_sub_state_gps_active(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_INACTIVE)) {
@@ -216,6 +227,7 @@ static void on_state_active_sub_state_gps_active(struct output_msg_data *msg)
 	}
 }
 
+/* Message handler for SUB_STATE_GPS_INACTIVE in STATE_ACTIVE. */
 static void on_state_active_sub_state_gps_inactive(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_ACTIVE)) {
@@ -238,6 +250,7 @@ static void on_state_active_sub_state_gps_inactive(struct output_msg_data *msg)
 	}
 }
 
+/* Message handler for SUB_STATE_GPS_ACTIVE in STATE_PASSIVE. */
 static void on_state_passive_sub_state_gps_active(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_INACTIVE)) {
@@ -260,6 +273,7 @@ static void on_state_passive_sub_state_gps_active(struct output_msg_data *msg)
 	}
 }
 
+/* Message handler for SUB_STATE_GPS_INACTIVE in STATE_PASSIVE. */
 static void on_state_passive_sub_state_gps_inactive(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_ACTIVE)) {
@@ -282,6 +296,7 @@ static void on_state_passive_sub_state_gps_inactive(struct output_msg_data *msg)
 	}
 }
 
+/* Message handler for all states. */
 static void on_all_states(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_EVT_START)) {

@@ -97,13 +97,14 @@ K_TIMER_DEFINE(movement_timeout_timer, data_sample_timer_handler, NULL);
 K_TIMER_DEFINE(movement_resolution_timer, NULL, NULL);
 
 /* Module data structure to hold information of the application module, which
- * opens up for using convenienve functions available for modules.
+ * opens up for using convenience functions available for modules.
  */
 static struct module_data self = {
 	.name = "app",
 	.msg_q = &msgq_app,
 };
 
+/* Convenience functions used in internal state handling. */
 static char *state2str(enum state_type new_state)
 {
 	switch (new_state) {
@@ -157,7 +158,7 @@ static void sub_state_set(enum sub_state_type new_state)
 }
 
 /* Event manager handler. Puts event data into messages and adds them to the
- * application messagea queue.
+ * application message queue.
  */
 static bool event_handler(const struct event_header *eh)
 {
@@ -228,6 +229,13 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
+static void data_sample_timer_handler(struct k_timer *timer)
+{
+	ARG_UNUSED(timer);
+	SEND_EVENT(app, APP_EVT_DATA_GET_ALL);
+}
+
+/* Static module functions. */
 static void data_get_init(void)
 {
 	struct app_module_event *app_module_event = new_app_module_event();
@@ -270,12 +278,6 @@ static void data_get_all(void)
 	app_module_event->timeout = app_cfg.gpst + 60;
 
 	EVENT_SUBMIT(app_module_event);
-}
-
-static void data_sample_timer_handler(struct k_timer *timer)
-{
-	ARG_UNUSED(timer);
-	SEND_EVENT(app, APP_EVT_DATA_GET_ALL);
 }
 
 /* Message handler for STATE_INIT. */

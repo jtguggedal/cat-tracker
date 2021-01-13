@@ -19,10 +19,6 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_UI_MODULE_LOG_LEVEL);
 
-static struct module_data self = {
-	.name = "ui",
-};
-
 struct ui_msg_data {
 	union {
 		struct util_module_event util;
@@ -30,7 +26,37 @@ struct ui_msg_data {
 	} module;
 };
 
+static struct module_data self = {
+	.name = "ui",
+	.msg_q = NULL,
+};
+
+/* Forward declarations. */
 static void message_handler(struct ui_msg_data *msg);
+
+/* Handlers */
+static bool event_handler(const struct event_header *eh)
+{
+	if (is_app_module_event(eh)) {
+		struct app_module_event *event = cast_app_module_event(eh);
+		struct ui_msg_data msg = {
+			.module.app = *event
+		};
+
+		message_handler(&msg);
+	}
+
+	if (is_util_module_event(eh)) {
+		struct util_module_event *event = cast_util_module_event(eh);
+		struct ui_msg_data msg = {
+			.module.util = *event
+		};
+
+		message_handler(&msg);
+	}
+
+	return false;
+}
 
 static void button_handler(uint32_t button_states, uint32_t has_changed)
 {
@@ -62,6 +88,7 @@ static void button_handler(uint32_t button_states, uint32_t has_changed)
 #endif
 }
 
+/* Static module functions. */
 static int setup(void)
 {
 	int err;
@@ -73,29 +100,6 @@ static int setup(void)
 	}
 
 	return 0;
-}
-
-static bool event_handler(const struct event_header *eh)
-{
-	if (is_app_module_event(eh)) {
-		struct app_module_event *event = cast_app_module_event(eh);
-		struct ui_msg_data msg = {
-			.module.app = *event
-		};
-
-		message_handler(&msg);
-	}
-
-	if (is_util_module_event(eh)) {
-		struct util_module_event *event = cast_util_module_event(eh);
-		struct ui_msg_data msg = {
-			.module.util = *event
-		};
-
-		message_handler(&msg);
-	}
-
-	return false;
 }
 
 static void message_handler(struct ui_msg_data *msg)

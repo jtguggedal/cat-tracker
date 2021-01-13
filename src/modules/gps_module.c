@@ -27,10 +27,6 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_GPS_MODULE_LOG_LEVEL);
  */
 #define GPS_INTERVAL_MAX 1800
 
-static struct module_data self = {
-	.name = "gps",
-};
-
 struct gps_msg_data {
 	union {
 		struct app_module_event app;
@@ -46,13 +42,35 @@ static enum state_type {
 	STATE_RUNNING
 } state;
 
+/* GPS module sub states. */
 static enum sub_state_type {
 	SUB_STATE_IDLE,
 	SUB_STATE_SEARCH
 } sub_state;
 
-static void message_handler(struct gps_msg_data *data);
+/* GPS device. Used to identify the GPS driver in the sensor API. */
+static const struct device *gps_dev;
 
+/* nRF9160 GPS driver configuration. */
+static struct gps_config gps_cfg = {
+	.nav_mode = GPS_NAV_MODE_PERIODIC,
+	.power_mode = GPS_POWER_MODE_DISABLED,
+	.interval = GPS_INTERVAL_MAX
+};
+
+static struct module_data self = {
+	.name = "gps",
+	.msg_q = NULL,
+};
+
+/* Forward declarations. */
+static void message_handler(struct gps_msg_data *data);
+static void search_start(void);
+static void search_stop(void);
+static void time_set(struct gps_pvt *gps_data);
+static void data_send(struct gps_pvt *gps_data);
+
+/* Convenience functions used in internal state handling. */
 static char *state2str(enum state_type new_state)
 {
 	switch (new_state) {
@@ -105,153 +123,7 @@ static void sub_state_set(enum sub_state_type new_state)
 	sub_state = new_state;
 }
 
-/* GPS device. Used to identify the GPS driver in the sensor API. */
-static const struct device *gps_dev;
-
-/* nRF9160 GPS driver configuration. */
-static struct gps_config gps_cfg = {
-	.nav_mode = GPS_NAV_MODE_PERIODIC,
-	.power_mode = GPS_POWER_MODE_DISABLED,
-	.interval = GPS_INTERVAL_MAX
-};
-
-static void gps_data_send(struct gps_pvt *gps_data)
-{
-	struct gps_module_event *gps_module_event = new_gps_module_event();
-
-	gps_module_event->data.gps.longitude = gps_data->longitude;
-	gps_module_event->data.gps.latitude = gps_data->latitude;
-	gps_module_event->data.gps.altitude = gps_data->altitude;
-	gps_module_event->data.gps.accuracy = gps_data->accuracy;
-	gps_module_event->data.gps.speed = gps_data->speed;
-	gps_module_event->data.gps.heading = gps_data->heading;
-	gps_module_event->data.gps.timestamp = k_uptime_get();
-	gps_module_event->type = GPS_EVT_DATA_READY;
-
-	EVENT_SUBMIT(gps_module_event);
-}
-
-static void gps_search_start(void)
-{
-	int err;
-
-	/* Do not initiate GPS search if timeout is 0. */
-	if (gps_cfg.timeout == 0) {
-		LOG_WRN("GPS search disabled");
-		return;
-	}
-
-	err = gps_start(gps_dev, &gps_cfg);
-	if (err) {
-		LOG_WRN("Failed to start GPS, error: %d", err);
-		return;
-	}
-
-	SEND_EVENT(gps, GPS_EVT_ACTIVE);
-}
-
-static void gps_search_stop(void)
-{
-	int err;
-
-	err = gps_stop(gps_dev);
-	if (err) {
-		LOG_WRN("Failed to stop GPS, error: %d", err);
-		return;
-	}
-
-	SEND_EVENT(gps, GPS_EVT_INACTIVE);
-}
-
-static void gps_time_set(struct gps_pvt *gps_data)
-{
-	/* Change datetime.year and datetime.month to accommodate the
-	 * correct input format.
-	 */
-	struct tm gps_time = {
-		.tm_year = gps_data->datetime.year - 1900,
-		.tm_mon = gps_data->datetime.month - 1,
-		.tm_mday = gps_data->datetime.day,
-		.tm_hour = gps_data->datetime.hour,
-		.tm_min = gps_data->datetime.minute,
-		.tm_sec = gps_data->datetime.seconds,
-	};
-
-	date_time_set(&gps_time);
-}
-
-static void gps_event_handler(const struct device *dev, struct gps_event *evt)
-{
-	switch (evt->type) {
-	case GPS_EVT_SEARCH_STARTED:
-		LOG_DBG("GPS_EVT_SEARCH_STARTED");
-		break;
-	case GPS_EVT_SEARCH_STOPPED:
-		LOG_DBG("GPS_EVT_SEARCH_STOPPED");
-		break;
-	case GPS_EVT_SEARCH_TIMEOUT:
-		LOG_DBG("GPS_EVT_SEARCH_TIMEOUT");
-		SEND_EVENT(gps, GPS_EVT_TIMEOUT);
-		gps_search_stop();
-		break;
-	case GPS_EVT_PVT:
-		/* Don't spam logs */
-		break;
-	case GPS_EVT_PVT_FIX:
-		LOG_DBG("GPS_EVT_PVT_FIX");
-		gps_time_set(&evt->pvt);
-		gps_data_send(&evt->pvt);
-		gps_search_stop();
-		break;
-	case GPS_EVT_NMEA:
-		/* Don't spam logs */
-		break;
-	case GPS_EVT_NMEA_FIX:
-		LOG_DBG("Position fix with NMEA data");
-		break;
-	case GPS_EVT_OPERATION_BLOCKED:
-		LOG_DBG("GPS_EVT_OPERATION_BLOCKED");
-		break;
-	case GPS_EVT_OPERATION_UNBLOCKED:
-		LOG_DBG("GPS_EVT_OPERATION_UNBLOCKED");
-		break;
-	case GPS_EVT_AGPS_DATA_NEEDED:
-		LOG_DBG("GPS_EVT_AGPS_DATA_NEEDED");
-		struct gps_module_event *gps_module_event =
-				new_gps_module_event();
-
-		gps_module_event->data.agps_request = evt->agps_request;
-		gps_module_event->type = GPS_EVT_AGPS_NEEDED;
-		EVENT_SUBMIT(gps_module_event);
-		break;
-	case GPS_EVT_ERROR:
-		LOG_DBG("GPS_EVT_ERROR\n");
-		break;
-	default:
-		break;
-	}
-}
-
-static int setup(void)
-{
-	int err;
-
-	gps_dev = device_get_binding(CONFIG_GPS_DEV_NAME);
-	if (gps_dev == NULL) {
-		LOG_ERR("Could not get %s device",
-			log_strdup(CONFIG_GPS_DEV_NAME));
-		return -ENODEV;
-	}
-
-	err = gps_init(gps_dev, gps_event_handler);
-	if (err) {
-		LOG_ERR("Could not initialize GPS, error: %d", err);
-		return err;
-	}
-
-	return 0;
-}
-
+/* Handlers */
 static bool event_handler(const struct event_header *eh)
 {
 	if (is_app_module_event(eh)) {
@@ -293,6 +165,118 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
+static void gps_event_handler(const struct device *dev, struct gps_event *evt)
+{
+	switch (evt->type) {
+	case GPS_EVT_SEARCH_STARTED:
+		LOG_DBG("GPS_EVT_SEARCH_STARTED");
+		break;
+	case GPS_EVT_SEARCH_STOPPED:
+		LOG_DBG("GPS_EVT_SEARCH_STOPPED");
+		break;
+	case GPS_EVT_SEARCH_TIMEOUT:
+		LOG_DBG("GPS_EVT_SEARCH_TIMEOUT");
+		SEND_EVENT(gps, GPS_EVT_TIMEOUT);
+		search_stop();
+		break;
+	case GPS_EVT_PVT:
+		/* Don't spam logs */
+		break;
+	case GPS_EVT_PVT_FIX:
+		LOG_DBG("GPS_EVT_PVT_FIX");
+		time_set(&evt->pvt);
+		data_send(&evt->pvt);
+		search_stop();
+		break;
+	case GPS_EVT_NMEA:
+		/* Don't spam logs */
+		break;
+	case GPS_EVT_NMEA_FIX:
+		LOG_DBG("Position fix with NMEA data");
+		break;
+	case GPS_EVT_OPERATION_BLOCKED:
+		LOG_DBG("GPS_EVT_OPERATION_BLOCKED");
+		break;
+	case GPS_EVT_OPERATION_UNBLOCKED:
+		LOG_DBG("GPS_EVT_OPERATION_UNBLOCKED");
+		break;
+	case GPS_EVT_AGPS_DATA_NEEDED:
+		LOG_DBG("GPS_EVT_AGPS_DATA_NEEDED");
+		struct gps_module_event *gps_module_event =
+				new_gps_module_event();
+
+		gps_module_event->data.agps_request = evt->agps_request;
+		gps_module_event->type = GPS_EVT_AGPS_NEEDED;
+		EVENT_SUBMIT(gps_module_event);
+		break;
+	case GPS_EVT_ERROR:
+		LOG_DBG("GPS_EVT_ERROR\n");
+		break;
+	default:
+		break;
+	}
+}
+
+/* Static module functions. */
+static void data_send(struct gps_pvt *gps_data)
+{
+	struct gps_module_event *gps_module_event = new_gps_module_event();
+
+	gps_module_event->data.gps.longitude = gps_data->longitude;
+	gps_module_event->data.gps.latitude = gps_data->latitude;
+	gps_module_event->data.gps.altitude = gps_data->altitude;
+	gps_module_event->data.gps.accuracy = gps_data->accuracy;
+	gps_module_event->data.gps.speed = gps_data->speed;
+	gps_module_event->data.gps.heading = gps_data->heading;
+	gps_module_event->data.gps.timestamp = k_uptime_get();
+	gps_module_event->type = GPS_EVT_DATA_READY;
+
+	EVENT_SUBMIT(gps_module_event);
+}
+
+static void search_start(void)
+{
+	int err;
+
+	err = gps_start(gps_dev, &gps_cfg);
+	if (err) {
+		LOG_WRN("Failed to start GPS, error: %d", err);
+		return;
+	}
+
+	SEND_EVENT(gps, GPS_EVT_ACTIVE);
+}
+
+static void search_stop(void)
+{
+	int err;
+
+	err = gps_stop(gps_dev);
+	if (err) {
+		LOG_WRN("Failed to stop GPS, error: %d", err);
+		return;
+	}
+
+	SEND_EVENT(gps, GPS_EVT_INACTIVE);
+}
+
+static void time_set(struct gps_pvt *gps_data)
+{
+	/* Change datetime.year and datetime.month to accommodate the
+	 * correct input format.
+	 */
+	struct tm gps_time = {
+		.tm_year = gps_data->datetime.year - 1900,
+		.tm_mon = gps_data->datetime.month - 1,
+		.tm_mday = gps_data->datetime.day,
+		.tm_hour = gps_data->datetime.hour,
+		.tm_min = gps_data->datetime.minute,
+		.tm_sec = gps_data->datetime.seconds,
+	};
+
+	date_time_set(&gps_time);
+}
+
 static bool gps_data_requested(enum app_module_data_type *data_list,
 			       size_t count)
 {
@@ -305,6 +289,27 @@ static bool gps_data_requested(enum app_module_data_type *data_list,
 	return false;
 }
 
+static int setup(void)
+{
+	int err;
+
+	gps_dev = device_get_binding(CONFIG_GPS_DEV_NAME);
+	if (gps_dev == NULL) {
+		LOG_ERR("Could not get %s device",
+			log_strdup(CONFIG_GPS_DEV_NAME));
+		return -ENODEV;
+	}
+
+	err = gps_init(gps_dev, gps_event_handler);
+	if (err) {
+		LOG_ERR("Could not initialize GPS, error: %d", err);
+		return err;
+	}
+
+	return 0;
+}
+
+/* Message handler for STATE_INIT. */
 static void on_state_init(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
@@ -313,6 +318,7 @@ static void on_state_init(struct gps_msg_data *msg)
 	}
 }
 
+/* Message handler for STATE_RUNNING. */
 static void on_state_running(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
@@ -320,6 +326,7 @@ static void on_state_running(struct gps_msg_data *msg)
 	}
 }
 
+/* Message handler for SUB_STATE_SEARCH. */
 static void on_state_running_gps_search(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_INACTIVE)) {
@@ -338,6 +345,7 @@ static void on_state_running_gps_search(struct gps_msg_data *msg)
 	}
 }
 
+/* Message handler for SUB_STATE_IDLE. */
 static void on_state_running_gps_idle(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_ACTIVE)) {
@@ -350,10 +358,11 @@ static void on_state_running_gps_idle(struct gps_msg_data *msg)
 			return;
 		}
 
-		gps_search_start();
+		search_start();
 	}
 }
 
+/* Message handler for all states. */
 static void on_all_states(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_EVT_START)) {

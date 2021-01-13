@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _GPS_EVENT_H_
-#define _GPS_EVENT_H_
+#ifndef _GPS_MODULE_EVENT_H_
+#define _GPS_MODULE_EVENT_H_
 
 /**
- * @brief GPS Event
- * @defgroup gps_module_event GPS Event
+ * @brief GPS module event
+ * @defgroup gps_module_event GPS module event
  * @{
  */
 
@@ -64,4 +64,4 @@ EVENT_TYPE_DECLARE(gps_module_event);
  * @}
  */
 
-#endif /* _GPS_EVENT_H_ */
+#endif /* _GPS_MODULE_EVENT_H_ */

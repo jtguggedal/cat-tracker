@@ -38,13 +38,24 @@ static enum state_type {
 	STATE_RUNNING
 } state;
 
-K_MSGQ_DEFINE(msgq_sensor, sizeof(struct sensor_msg_data), 10, 4);
+/* Sensor module message queue. */
+#define SENSOR_QUEUE_ENTRY_COUNT	10
+#define SENSOR_QUEUE_BYTE_ALIGNMENT	4
+
+K_MSGQ_DEFINE(msgq_sensor, sizeof(struct sensor_msg_data),
+	      SENSOR_QUEUE_ENTRY_COUNT, SENSOR_QUEUE_BYTE_ALIGNMENT);
 
 static struct module_data self = {
 	.name = "sensor",
 	.msg_q = &msgq_sensor,
 };
 
+/* Forward declarations. */
+#if defined(CONFIG_EXTERNAL_SENSORS)
+static void movement_data_send(const struct ext_sensor_evt *const acc_data);
+#endif
+
+/* Convenience functions used in internal state handling. */
 static char *state2str(enum state_type new_state)
 {
 	switch (new_state) {
@@ -71,6 +82,53 @@ static void state_set(enum state_type new_state)
 	state = new_state;
 }
 
+/* Handlers */
+static bool event_handler(const struct event_header *eh)
+{
+	if (is_app_module_event(eh)) {
+		struct app_module_event *event = cast_app_module_event(eh);
+		struct sensor_msg_data sensor_msg = {
+			.module.app = *event
+		};
+
+		module_enqueue_msg(&self, &sensor_msg);
+	}
+
+	if (is_data_module_event(eh)) {
+		struct data_module_event *event = cast_data_module_event(eh);
+		struct sensor_msg_data sensor_msg = {
+			.module.data = *event
+		};
+
+		module_enqueue_msg(&self, &sensor_msg);
+	}
+
+	if (is_util_module_event(eh)) {
+		struct util_module_event *event = cast_util_module_event(eh);
+		struct sensor_msg_data sensor_msg = {
+			.module.util = *event
+		};
+
+		module_enqueue_msg(&self, &sensor_msg);
+	}
+
+	return false;
+}
+
+#if defined(CONFIG_EXTERNAL_SENSORS)
+static void ext_sensor_handler(const struct ext_sensor_evt *const evt)
+{
+	switch (evt->type) {
+	case EXT_SENSOR_EVT_ACCELEROMETER_TRIGGER:
+		movement_data_send(evt);
+		break;
+	default:
+		break;
+	}
+}
+#endif
+
+/* Static module functions. */
 #if defined(CONFIG_EXTERNAL_SENSORS)
 static void movement_data_send(const struct ext_sensor_evt *const acc_data)
 {
@@ -84,17 +142,6 @@ static void movement_data_send(const struct ext_sensor_evt *const acc_data)
 	sensor_module_event->type = SENSOR_EVT_MOVEMENT_DATA_READY;
 
 	EVENT_SUBMIT(sensor_module_event);
-}
-
-static void ext_sensor_handler(const struct ext_sensor_evt *const evt)
-{
-	switch (evt->type) {
-	case EXT_SENSOR_EVT_ACCELEROMETER_TRIGGER:
-		movement_data_send(evt);
-		break;
-	default:
-		break;
-	}
 }
 #endif
 
@@ -157,38 +204,6 @@ static int setup(void)
 	return 0;
 }
 
-static bool event_handler(const struct event_header *eh)
-{
-	if (is_app_module_event(eh)) {
-		struct app_module_event *event = cast_app_module_event(eh);
-		struct sensor_msg_data sensor_msg = {
-			.module.app = *event
-		};
-
-		module_enqueue_msg(&self, &sensor_msg);
-	}
-
-	if (is_data_module_event(eh)) {
-		struct data_module_event *event = cast_data_module_event(eh);
-		struct sensor_msg_data sensor_msg = {
-			.module.data = *event
-		};
-
-		module_enqueue_msg(&self, &sensor_msg);
-	}
-
-	if (is_util_module_event(eh)) {
-		struct util_module_event *event = cast_util_module_event(eh);
-		struct sensor_msg_data sensor_msg = {
-			.module.util = *event
-		};
-
-		module_enqueue_msg(&self, &sensor_msg);
-	}
-
-	return false;
-}
-
 static bool environmental_data_requested(enum app_module_data_type *data_list,
 					 size_t count)
 {
@@ -201,6 +216,7 @@ static bool environmental_data_requested(enum app_module_data_type *data_list,
 	return false;
 }
 
+/* Message handler for STATE_INIT. */
 static void on_state_init(struct sensor_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
@@ -220,6 +236,7 @@ static void on_state_init(struct sensor_msg_data *msg)
 	}
 }
 
+/* Message handler for STATE_RUNNING. */
 static void on_state_running(struct sensor_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
@@ -255,6 +272,7 @@ static void on_state_running(struct sensor_msg_data *msg)
 	}
 }
 
+/* Message handler for all states. */
 static void on_all_states(struct sensor_msg_data *msg)
 {
 	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {

@@ -37,8 +37,6 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_DATA_MODULE_LOG_LEVEL);
 #define DEFAULT_GPS_TIMEOUT_SECONDS		60
 #define DEFAULT_DEVICE_MODE			true
 
-static void data_send_work_fn(struct k_work *work);
-
 struct data_msg_data {
 	union {
 		struct modem_module_event modem;
@@ -52,12 +50,12 @@ struct data_msg_data {
 	} module;
 };
 
-K_MSGQ_DEFINE(msgq_data, sizeof(struct data_msg_data), 10, 4);
+/* Data module super states. */
+static enum state_type {
+	STATE_CLOUD_DISCONNECTED,
+	STATE_CLOUD_CONNECTED
+} state;
 
-static struct module_data self = {
-	.name = "data",
-	.msg_q = &msgq_data,
-};
 /* Ringbuffers. All data received by the Data module are stored in ringbuffers.
  * Upon a LTE connection loss the device will keep sampling/storing data in
  * the buffers, and empty the buffers in batches upon a reconnect.
@@ -94,12 +92,6 @@ static struct cloud_data_cfg current_cfg = {
 	.acct = DEFAULT_ACCELEROMETER_THRESHOLD
 };
 
-/* Cloud connection state. */
-static enum state_type {
-	STATE_CLOUD_DISCONNECTED,
-	STATE_CLOUD_CONNECTED
-} state;
-
 static struct k_delayed_work data_send_work;
 
 /* List used to keep track of responses from other modules with data that is
@@ -122,7 +114,20 @@ static int data_cnt;
  */
 static void *pending_data[10];
 
+/* Data module message queue. */
+#define DATA_QUEUE_ENTRY_COUNT		10
+#define DATA_QUEUE_BYTE_ALIGNMENT	4
+
+K_MSGQ_DEFINE(msgq_data, sizeof(struct data_msg_data),
+	      DATA_QUEUE_ENTRY_COUNT, DATA_QUEUE_BYTE_ALIGNMENT);
+
+static struct module_data self = {
+	.name = "data",
+	.msg_q = &msgq_data,
+};
+
 /* Forward declarations */
+static void data_send_work_fn(struct k_work *work);
 static int config_settings_handler(const char *key, size_t len,
 				   settings_read_cb read_cb, void *cb_arg);
 
@@ -130,6 +135,7 @@ static int config_settings_handler(const char *key, size_t len,
 SETTINGS_STATIC_HANDLER_DEFINE(MODULE, DEVICE_SETTINGS_KEY, NULL,
 			       config_settings_handler, NULL, NULL);
 
+/* Convenience functions used in internal state handling. */
 static char *state2str(enum state_type new_state)
 {
 	switch (new_state) {
@@ -156,6 +162,127 @@ static void state_set(enum state_type new_state)
 	state = new_state;
 }
 
+/* Handlers */
+static bool event_handler(const struct event_header *eh)
+{
+	if (is_modem_module_event(eh)) {
+		struct modem_module_event *event = cast_modem_module_event(eh);
+		struct data_msg_data data_msg = {
+			.module.modem = *event
+		};
+
+		module_enqueue_msg(&self, &data_msg);
+	}
+
+	if (is_cloud_module_event(eh)) {
+		struct cloud_module_event *event = cast_cloud_module_event(eh);
+		struct data_msg_data data_msg = {
+			.module.cloud = *event
+		};
+
+		module_enqueue_msg(&self, &data_msg);
+	}
+
+	if (is_gps_module_event(eh)) {
+		struct gps_module_event *event = cast_gps_module_event(eh);
+		struct data_msg_data data_msg = {
+			.module.gps = *event
+		};
+
+		module_enqueue_msg(&self, &data_msg);
+	}
+
+	if (is_sensor_module_event(eh)) {
+		struct sensor_module_event *event =
+				cast_sensor_module_event(eh);
+		struct data_msg_data data_msg = {
+			.module.sensor = *event
+		};
+
+		module_enqueue_msg(&self, &data_msg);
+	}
+
+	if (is_ui_module_event(eh)) {
+		struct ui_module_event *event = cast_ui_module_event(eh);
+		struct data_msg_data data_msg = {
+			.module.ui = *event
+		};
+
+		module_enqueue_msg(&self, &data_msg);
+	}
+
+	if (is_app_module_event(eh)) {
+		struct app_module_event *event = cast_app_module_event(eh);
+		struct data_msg_data data_msg = {
+			.module.app = *event
+		};
+
+		module_enqueue_msg(&self, &data_msg);
+	}
+
+	if (is_data_module_event(eh)) {
+		struct data_module_event *event = cast_data_module_event(eh);
+		struct data_msg_data data_msg = {
+			.module.data = *event
+		};
+
+		module_enqueue_msg(&self, &data_msg);
+	}
+
+	if (is_util_module_event(eh)) {
+		struct util_module_event *event = cast_util_module_event(eh);
+		struct data_msg_data data_msg = {
+			.module.util = *event
+		};
+
+		module_enqueue_msg(&self, &data_msg);
+	}
+
+	return false;
+}
+
+static int config_settings_handler(const char *key, size_t len,
+				   settings_read_cb read_cb, void *cb_arg)
+{
+	int err;
+
+	if (strcmp(key, DEVICE_SETTINGS_CONFIG_KEY) == 0) {
+		err = read_cb(cb_arg, &current_cfg, sizeof(current_cfg));
+		if (err < 0) {
+			LOG_ERR("Failed to load configuration, error: %d", err);
+			return err;
+		}
+	}
+
+	LOG_DBG("Device configuration loaded from flash");
+
+	return 0;
+}
+
+static void date_time_event_handler(const struct date_time_evt *evt)
+{
+	switch (evt->type) {
+	case DATE_TIME_OBTAINED_MODEM:
+		/* Fall through. */
+	case DATE_TIME_OBTAINED_NTP:
+		/* Fall through. */
+	case DATE_TIME_OBTAINED_EXT: {
+		SEND_EVENT(data, DATA_EVT_DATE_TIME_OBTAINED);
+
+		/* De-register handler. At this point the application will have
+		 * date time to depend on indefinitely until a reboot occurs.
+		 */
+		date_time_register_handler(NULL);
+		break;
+	}
+	case DATE_TIME_NOT_OBTAINED:
+		break;
+	default:
+		break;
+	}
+}
+
+/* Static module functions. */
 static bool pending_data_add(void *ptr)
 {
 	for (size_t i = 0; i < ARRAY_SIZE(pending_data); i++) {
@@ -190,24 +317,6 @@ static bool pending_data_ack(void *ptr)
 	LOG_WRN("No matching pointer was found");
 
 	return false;
-}
-
-static int config_settings_handler(const char *key, size_t len,
-				   settings_read_cb read_cb, void *cb_arg)
-{
-	int err;
-
-	if (strcmp(key, DEVICE_SETTINGS_CONFIG_KEY) == 0) {
-		err = read_cb(cb_arg, &current_cfg, sizeof(current_cfg));
-		if (err < 0) {
-			LOG_ERR("Failed to load configuration, error: %d", err);
-			return err;
-		}
-	}
-
-	LOG_DBG("Device configuration loaded from flash");
-
-	return 0;
 }
 
 static int save_config(const void *buf, size_t buf_len)
@@ -256,31 +365,6 @@ static void config_distribute(enum data_module_event_types type)
 	data_module_event->data.cfg = current_cfg;
 
 	EVENT_SUBMIT(data_module_event);
-}
-
-/* Date and time control */
-
-static void date_time_event_handler(const struct date_time_evt *evt)
-{
-	switch (evt->type) {
-	case DATE_TIME_OBTAINED_MODEM:
-		/* Fall through. */
-	case DATE_TIME_OBTAINED_NTP:
-		/* Fall through. */
-	case DATE_TIME_OBTAINED_EXT: {
-		SEND_EVENT(data, DATA_EVT_DATE_TIME_OBTAINED);
-
-		/* De-register handler. At this point the application will have
-		 * date time to depend on indefinitely until a reboot occurs.
-		 */
-		date_time_register_handler(NULL);
-		break;
-	}
-	case DATE_TIME_NOT_OBTAINED:
-		break;
-	default:
-		break;
-	}
 }
 
 /* This function allocates buffer on the heap, which needs to be freed afte use.
@@ -427,84 +511,6 @@ static void data_ui_send(void)
 	EVENT_SUBMIT(evt);
 }
 
-static bool event_handler(const struct event_header *eh)
-{
-	if (is_modem_module_event(eh)) {
-		struct modem_module_event *event = cast_modem_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.modem = *event
-		};
-
-		module_enqueue_msg(&self, &data_msg);
-	}
-
-	if (is_cloud_module_event(eh)) {
-		struct cloud_module_event *event = cast_cloud_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.cloud = *event
-		};
-
-		module_enqueue_msg(&self, &data_msg);
-	}
-
-	if (is_gps_module_event(eh)) {
-		struct gps_module_event *event = cast_gps_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.gps = *event
-		};
-
-		module_enqueue_msg(&self, &data_msg);
-	}
-
-	if (is_sensor_module_event(eh)) {
-		struct sensor_module_event *event =
-				cast_sensor_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.sensor = *event
-		};
-
-		module_enqueue_msg(&self, &data_msg);
-	}
-
-	if (is_ui_module_event(eh)) {
-		struct ui_module_event *event = cast_ui_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.ui = *event
-		};
-
-		module_enqueue_msg(&self, &data_msg);
-	}
-
-	if (is_app_module_event(eh)) {
-		struct app_module_event *event = cast_app_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.app = *event
-		};
-
-		module_enqueue_msg(&self, &data_msg);
-	}
-
-	if (is_data_module_event(eh)) {
-		struct data_module_event *event = cast_data_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.data = *event
-		};
-
-		module_enqueue_msg(&self, &data_msg);
-	}
-
-	if (is_util_module_event(eh)) {
-		struct util_module_event *event = cast_util_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.util = *event
-		};
-
-		module_enqueue_msg(&self, &data_msg);
-	}
-
-	return false;
-}
-
 static void clear_local_data_list(void)
 {
 	received_data_type_count = 0;
@@ -549,6 +555,7 @@ static void data_list_set(enum app_module_data_type *data_list, size_t count)
 	received_data_type_count = count;
 }
 
+/* Message handler for STATE_CLOUD_DISCONNECTED. */
 static void on_cloud_state_disconnected(struct data_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_CONNECTED)) {
@@ -557,6 +564,7 @@ static void on_cloud_state_disconnected(struct data_msg_data *msg)
 	}
 }
 
+/* Message handler for STATE_CLOUD_CONNECTED. */
 static void on_cloud_state_connected(struct data_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_DATA_READY)) {
@@ -584,7 +592,7 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 		return;
 	}
 
-	/* DIstribute new configuration received form cloud */
+	/* Distribute new configuration received from cloud. */
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_CONFIG_RECEIVED)) {
 
 		int err;
@@ -669,6 +677,7 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 	}
 }
 
+/* Message handler for all states. */
 static void on_all_states(struct data_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_EVT_START)) {

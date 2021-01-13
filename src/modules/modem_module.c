@@ -27,10 +27,6 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_MODEM_MODULE_LOG_LEVEL);
 BUILD_ASSERT(!IS_ENABLED(CONFIG_LTE_AUTO_INIT_AND_CONNECT),
 		"The Modem module does not support this configuration");
 
-static struct module_data self = {
-	.name = "modem",
-};
-
 struct modem_msg_data {
 	union {
 		struct app_module_event app;
@@ -40,7 +36,7 @@ struct modem_msg_data {
 	} module;
 };
 
-/* Modem module connection states. */
+/* Modem module super states. */
 static enum state_type {
 	STATE_DISCONNECTED,
 	STATE_CONNECTING,
@@ -48,10 +44,24 @@ static enum state_type {
 	STATE_SHUTTING_DOWN,
 } state;
 
+/* Struct that holds data from the modem information module. */
+static struct modem_param_info modem_param;
+
+/* Value that always holds the latest RSRP value. */
+static uint16_t rsrp_value_latest;
+
+static struct module_data self = {
+	.name = "modem",
+	.msg_q = NULL,
+};
+
 /* Forward declarations. */
 static void message_handler(struct modem_msg_data *msg);
+static void send_cell_update(uint32_t cell_id, uint32_t tac);
+static void send_psm_update(int tau, int active_time);
+static void send_edrx_update(float edrx, float ptw);
 
-/* Convenience function that translates enumerator states to strings. */
+/* Convenience functions used in internal state handling. */
 static char *state2str(enum state_type state)
 {
 	switch (state) {
@@ -68,7 +78,6 @@ static char *state2str(enum state_type state)
 	}
 }
 
-/* Function to set the internal connection state of the Modem module. */
 static void state_set(enum state_type new_state)
 {
 	if (new_state == state) {
@@ -83,15 +92,7 @@ static void state_set(enum state_type new_state)
 	state = new_state;
 }
 
-/* Struct that holds data from the modem information module. */
-static struct modem_param_info modem_param;
-
-/* Value that always holds the latest RSRP value. */
-static uint16_t rsrp_value_latest;
-
-
-/* Event manager handler */
-
+/* Handlers */
 static bool event_handler(const struct event_header *eh)
 {
 	if (is_modem_module_event(eh)) {
@@ -133,6 +134,84 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
+static void lte_evt_handler(const struct lte_lc_evt *const evt)
+{
+	switch (evt->type) {
+	case LTE_LC_EVT_NW_REG_STATUS:
+		if (evt->nw_reg_status == LTE_LC_NW_REG_UICC_FAIL) {
+			LOG_ERR("No SIM card detected!");
+			SEND_ERROR(modem, MODEM_EVT_ERROR, -ENOTSUP);
+			break;
+		}
+
+		if ((evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_HOME) &&
+		    (evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_ROAMING)) {
+			SEND_EVENT(modem, MODEM_EVT_LTE_DISCONNECTED);
+			break;
+		}
+
+		LOG_DBG("Network registration status: %s",
+			evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
+			"Connected - home network" : "Connected - roaming");
+
+		SEND_EVENT(modem, MODEM_EVT_LTE_CONNECTED);
+		break;
+	case LTE_LC_EVT_PSM_UPDATE:
+		LOG_DBG("PSM parameter update: TAU: %d, Active time: %d",
+			evt->psm_cfg.tau, evt->psm_cfg.active_time);
+		send_psm_update(evt->psm_cfg.tau, evt->psm_cfg.active_time);
+		break;
+	case LTE_LC_EVT_EDRX_UPDATE: {
+		char log_buf[60];
+		ssize_t len;
+
+		len = snprintf(log_buf, sizeof(log_buf),
+			       "eDRX parameter update: eDRX: %f, PTW: %f",
+			       evt->edrx_cfg.edrx, evt->edrx_cfg.ptw);
+		if (len > 0) {
+			LOG_DBG("%s", log_strdup(log_buf));
+		}
+
+		send_edrx_update(evt->edrx_cfg.edrx, evt->edrx_cfg.ptw);
+		break;
+	}
+	case LTE_LC_EVT_RRC_UPDATE:
+		LOG_DBG("RRC mode: %s",
+			evt->rrc_mode == LTE_LC_RRC_MODE_CONNECTED ?
+			"Connected" : "Idle");
+		break;
+	case LTE_LC_EVT_CELL_UPDATE:
+		LOG_DBG("LTE cell changed: Cell ID: %d, Tracking area: %d",
+			evt->cell.id, evt->cell.tac);
+		send_cell_update(evt->cell.id, evt->cell.tac);
+		break;
+	default:
+		break;
+	}
+}
+
+static void modem_rsrp_handler(char rsrp_value)
+{
+	/* RSRP raw values that represent actual signal strength are
+	 * 0 through 97 (per "nRF91 AT Commands" v1.1).
+	 */
+
+	if (rsrp_value > 97) {
+		return;
+	}
+
+	/* Set temporary variable to hold RSRP value. RSRP callbacks and other
+	 * data from the modem info module are retrieved separately.
+	 * This temporarily saves the latest value which are sent to
+	 * the Data module upon a modem data request.
+	 */
+	rsrp_value_latest = rsrp_value;
+
+	LOG_DBG("Incoming RSRP status message, RSRP value is %d",
+		rsrp_value_latest);
+}
+
+/* Static module functions. */
 static void send_cell_update(uint32_t cell_id, uint32_t tac)
 {
 	struct modem_module_event *evt = new_modem_module_event();
@@ -164,54 +243,6 @@ static void send_edrx_update(float edrx, float ptw)
 	evt->data.edrx.ptw = ptw;
 
 	EVENT_SUBMIT(evt);
-}
-
-/* Modem info handling */
-
-static void modem_rsrp_handler(char rsrp_value)
-{
-	/* RSRP raw values that represent actual signal strength are
-	 * 0 through 97 (per "nRF91 AT Commands" v1.1).
-	 */
-
-	if (rsrp_value > 97) {
-		return;
-	}
-
-	/* Set temporary variable to hold RSRP value. RSRP callbacks and other
-	 * data from the modem info module are retrieved separately.
-	 * This temporarily saves the latest value which are sent to
-	 * the Data module upon a modem data request.
-	 */
-	rsrp_value_latest = rsrp_value;
-
-	LOG_DBG("Incoming RSRP status message, RSRP value is %d",
-		rsrp_value_latest);
-}
-
-static int modem_data_init(void)
-{
-	int err;
-
-	err = modem_info_init();
-	if (err) {
-		LOG_INF("modem_info_init, error: %d", err);
-		return err;
-	}
-
-	err = modem_info_params_init(&modem_param);
-	if (err) {
-		LOG_INF("modem_info_params_init, error: %d", err);
-		return err;
-	}
-
-	err = modem_info_rsrp_register(modem_rsrp_handler);
-	if (err) {
-		LOG_INF("modem_info_rsrp_register, error: %d", err);
-		return err;
-	}
-
-	return 0;
 }
 
 /* Produce a warning if modem firmware version is unexpected. */
@@ -387,66 +418,7 @@ static int battery_data_get(void)
 	return 0;
 }
 
-
-/* LTE configuration and handling */
-
-static void lte_evt_handler(const struct lte_lc_evt *const evt)
-{
-	switch (evt->type) {
-	case LTE_LC_EVT_NW_REG_STATUS:
-		if (evt->nw_reg_status == LTE_LC_NW_REG_UICC_FAIL) {
-			LOG_ERR("No SIM card detected!");
-			SEND_ERROR(modem, MODEM_EVT_ERROR, -ENOTSUP);
-			break;
-		}
-
-		if ((evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_HOME) &&
-		    (evt->nw_reg_status != LTE_LC_NW_REG_REGISTERED_ROAMING)) {
-			SEND_EVENT(modem, MODEM_EVT_LTE_DISCONNECTED);
-			break;
-		}
-
-		LOG_DBG("Network registration status: %s",
-			evt->nw_reg_status == LTE_LC_NW_REG_REGISTERED_HOME ?
-			"Connected - home network" : "Connected - roaming");
-
-		SEND_EVENT(modem, MODEM_EVT_LTE_CONNECTED);
-		break;
-	case LTE_LC_EVT_PSM_UPDATE:
-		LOG_DBG("PSM parameter update: TAU: %d, Active time: %d",
-			evt->psm_cfg.tau, evt->psm_cfg.active_time);
-		send_psm_update(evt->psm_cfg.tau, evt->psm_cfg.active_time);
-		break;
-	case LTE_LC_EVT_EDRX_UPDATE: {
-		char log_buf[60];
-		ssize_t len;
-
-		len = snprintf(log_buf, sizeof(log_buf),
-			       "eDRX parameter update: eDRX: %f, PTW: %f",
-			       evt->edrx_cfg.edrx, evt->edrx_cfg.ptw);
-		if (len > 0) {
-			LOG_DBG("%s", log_strdup(log_buf));
-		}
-
-		send_edrx_update(evt->edrx_cfg.edrx, evt->edrx_cfg.ptw);
-		break;
-	}
-	case LTE_LC_EVT_RRC_UPDATE:
-		LOG_DBG("RRC mode: %s",
-			evt->rrc_mode == LTE_LC_RRC_MODE_CONNECTED ?
-			"Connected" : "Idle");
-		break;
-	case LTE_LC_EVT_CELL_UPDATE:
-		LOG_DBG("LTE cell changed: Cell ID: %d, Tracking area: %d",
-			evt->cell.id, evt->cell.tac);
-		send_cell_update(evt->cell.id, evt->cell.tac);
-		break;
-	default:
-		break;
-	}
-}
-
-static int modem_configure_low_power(void)
+static int configure_low_power(void)
 {
 	int err;
 
@@ -477,6 +449,31 @@ static int lte_connect(void)
 	return 0;
 }
 
+static int modem_data_init(void)
+{
+	int err;
+
+	err = modem_info_init();
+	if (err) {
+		LOG_INF("modem_info_init, error: %d", err);
+		return err;
+	}
+
+	err = modem_info_params_init(&modem_param);
+	if (err) {
+		LOG_INF("modem_info_params_init, error: %d", err);
+		return err;
+	}
+
+	err = modem_info_rsrp_register(modem_rsrp_handler);
+	if (err) {
+		LOG_INF("modem_info_rsrp_register, error: %d", err);
+		return err;
+	}
+
+	return 0;
+}
+
 static int modem_setup(void)
 {
 	int err;
@@ -488,9 +485,9 @@ static int modem_setup(void)
 	}
 
 	if (IS_ENABLED(CONFIG_MODEM_AUTO_REQUEST_POWER_SAVING_FEATURES)) {
-		err = modem_configure_low_power();
+		err = configure_low_power();
 		if (err) {
-			LOG_ERR("modem_configure_low_power, error: %d", err);
+			LOG_ERR("configure_low_power, error: %d", err);
 			return err;
 		}
 	}
@@ -505,8 +502,7 @@ static int modem_setup(void)
 }
 
 
-/* Message handlers for each state */
-
+/* Message handler for STATE_DISCONNECTED. */
 static void on_state_disconnected(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTED)) {
@@ -518,6 +514,7 @@ static void on_state_disconnected(struct modem_msg_data *msg)
 	}
 }
 
+/* Message handler for STATE_CONNECTING. */
 static void on_state_connecting(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_EVT_LTE_DISCONNECT)) {
@@ -538,6 +535,7 @@ static void on_state_connecting(struct modem_msg_data *msg)
 	}
 }
 
+/* Message handler for STATE_CONNECTED. */
 static void on_state_connected(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_DISCONNECTED)) {
@@ -545,6 +543,7 @@ static void on_state_connected(struct modem_msg_data *msg)
 	}
 }
 
+/* Message handler for all states. */
 static void on_all_states(struct modem_msg_data *msg)
 {
 	if (IS_EVENT(msg, app, APP_EVT_START)) {

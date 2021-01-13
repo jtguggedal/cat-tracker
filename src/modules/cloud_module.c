@@ -41,22 +41,23 @@ struct cloud_msg_data {
 	} module;
 };
 
-static struct k_delayed_work connect_check_work;
-
-struct cloud_backoff_delay_lookup {
-	int delay;
-};
-
-/* Cloud module super-states. */
+/* Cloud module super states. */
 static enum state_type {
 	STATE_LTE_DISCONNECTED,
 	STATE_LTE_CONNECTED
 } state;
 
+/* Cloud module sub states. */
 static enum sub_state_type {
 	SUB_STATE_CLOUD_DISCONNECTED,
 	SUB_STATE_CLOUD_CONNECTED
 } sub_state;
+
+static struct k_delayed_work connect_check_work;
+
+struct cloud_backoff_delay_lookup {
+	int delay;
+};
 
 /* Lookup table for backoff reconnection to cloud. Binary scaling. */
 static struct cloud_backoff_delay_lookup backoff_delay[] = {
@@ -74,15 +75,23 @@ static int connect_retries;
 static struct cloud_data_cfg copy_cfg;
 const k_tid_t cloud_module_thread;
 
-K_MSGQ_DEFINE(msgq_cloud, sizeof(struct cloud_msg_data), 10, 4);
+/* Cloud module message queue. */
+#define CLOUD_QUEUE_ENTRY_COUNT		10
+#define CLOUD_QUEUE_BYTE_ALIGNMENT	4
+
+K_MSGQ_DEFINE(msgq_cloud, sizeof(struct cloud_msg_data),
+	      CLOUD_QUEUE_ENTRY_COUNT, CLOUD_QUEUE_BYTE_ALIGNMENT);
 
 static struct module_data self = {
-	.msg_q = &msgq_cloud,
 	.name = "cloud",
+	.msg_q = &msgq_cloud,
 };
 
+/* Forward declarations. */
 static void connect_check_work_fn(struct k_work *work);
+static void send_config_received(void);
 
+/* Convenience functions used in internal state handling. */
 static char *state2str(enum state_type state)
 {
 	switch (state) {
@@ -135,6 +144,142 @@ static void sub_state_set(enum sub_state_type new_state)
 	sub_state = new_state;
 }
 
+/* Handlers */
+static bool event_handler(const struct event_header *eh)
+{
+	if (is_app_module_event(eh)) {
+		struct app_module_event *event = cast_app_module_event(eh);
+		struct cloud_msg_data msg = {
+			.module.app = *event
+		};
+
+		module_enqueue_msg(&self, &msg);
+	}
+
+	if (is_data_module_event(eh)) {
+		struct data_module_event *event = cast_data_module_event(eh);
+		struct cloud_msg_data msg = {
+			.module.data = *event
+		};
+
+		module_enqueue_msg(&self, &msg);
+	}
+
+	if (is_modem_module_event(eh)) {
+		struct modem_module_event *event = cast_modem_module_event(eh);
+		struct cloud_msg_data msg = {
+			.module.modem = *event
+		};
+
+		module_enqueue_msg(&self, &msg);
+	}
+
+	if (is_cloud_module_event(eh)) {
+		struct cloud_module_event *event = cast_cloud_module_event(eh);
+		struct cloud_msg_data msg = {
+			.module.cloud = *event
+		};
+
+		module_enqueue_msg(&self, &msg);
+	}
+
+	if (is_util_module_event(eh)) {
+		struct util_module_event *event = cast_util_module_event(eh);
+		struct cloud_msg_data msg = {
+			.module.util = *event
+		};
+
+		module_enqueue_msg(&self, &msg);
+	}
+
+	if (is_gps_module_event(eh)) {
+		struct gps_module_event *event = cast_gps_module_event(eh);
+		struct cloud_msg_data msg = {
+			.module.gps = *event
+		};
+
+		module_enqueue_msg(&self, &msg);
+	}
+
+	return false;
+}
+
+static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
+{
+	switch (evt->type) {
+	case CLOUD_WRAP_EVT_CONNECTING: {
+		LOG_DBG("CLOUD_WRAP_EVT_CONNECTING");
+		SEND_EVENT(cloud, CLOUD_EVT_CONNECTING);
+		break;
+	}
+	case CLOUD_WRAP_EVT_CONNECTED: {
+		LOG_DBG("CLOUD_WRAP_EVT_CONNECTED");
+		SEND_EVENT(cloud, CLOUD_EVT_CONNECTED);
+		break;
+	}
+	case CLOUD_WRAP_EVT_DISCONNECTED: {
+		LOG_DBG("CLOUD_WRAP_EVT_DISCONNECTED");
+		SEND_EVENT(cloud, CLOUD_EVT_DISCONNECTED);
+		break;
+	}
+	case CLOUD_WRAP_EVT_DATA_RECEIVED:
+		LOG_DBG("CLOUD_WRAP_EVT_DATA_RECEIVED");
+
+		int err;
+
+		/* Use the config copy when populating the config variable
+		 * before it is sent to the Data module. This way we avoid
+		 * sending uninitialized variables to the Data module.
+		 */
+
+		err = cloud_codec_decode_config(evt->data.buf, &copy_cfg);
+		if (err == 0) {
+			LOG_DBG("Device configuration encoded");
+			send_config_received();
+			break;
+		} else if (err == -ENODATA) {
+			LOG_WRN("Device configuration empty!");
+		} else {
+			LOG_ERR("Decoding of device configuration, error: %d",
+				err);
+			SEND_ERROR(cloud, CLOUD_EVT_ERROR, err);
+			break;
+		}
+
+#if defined(CONFIG_AGPS)
+		err = gps_process_agps_data(evt->data.buf, evt->data.len);
+		if (err) {
+			LOG_WRN("Unable to process agps data, error: %d", err);
+		}
+#endif
+		break;
+	case CLOUD_WRAP_EVT_FOTA_DONE: {
+		LOG_DBG("CLOUD_WRAP_EVT_FOTA_DONE");
+		SEND_EVENT(cloud, CLOUD_EVT_FOTA_DONE);
+		break;
+	}
+	case CLOUD_WRAP_EVT_FOTA_START: {
+		LOG_DBG("CLOUD_WRAP_EVT_FOTA_START");
+		break;
+	}
+	case CLOUD_WRAP_EVT_FOTA_ERASE_PENDING:
+		LOG_DBG("CLOUD_WRAP_EVT_FOTA_ERASE_PENDING");
+		break;
+	case CLOUD_WRAP_EVT_FOTA_ERASE_DONE:
+		LOG_DBG("CLOUD_WRAP_EVT_FOTA_ERASE_DONE");
+		break;
+	case CLOUD_WRAP_EVT_ERROR: {
+		LOG_DBG("CLOUD_WRAP_EVT_ERROR");
+		SEND_ERROR(cloud, CLOUD_EVT_ERROR, evt->err);
+		break;
+	}
+	default:
+		break;
+
+	}
+}
+
+/* Static module functions. */
 static void send_data_ack(void *ptr)
 {
 	struct cloud_module_event *cloud_module_event =
@@ -278,68 +423,28 @@ static void connect_check_work_fn(struct k_work *work)
 	SEND_EVENT(cloud, CLOUD_EVT_CONNECTION_TIMEOUT);
 }
 
-static bool event_handler(const struct event_header *eh)
+static int setup(void)
 {
-	if (is_app_module_event(eh)) {
-		struct app_module_event *event = cast_app_module_event(eh);
-		struct cloud_msg_data msg = {
-			.module.app = *event
-		};
+	int err;
 
-		module_enqueue_msg(&self, &msg);
+	err = cloud_wrap_init(cloud_wrap_event_handler);
+	if (err) {
+		LOG_ERR("cloud_wrap_init, error: %d", err);
+		return err;
 	}
 
-	if (is_data_module_event(eh)) {
-		struct data_module_event *event = cast_data_module_event(eh);
-		struct cloud_msg_data msg = {
-			.module.data = *event
-		};
+	/* After a successful initializaton, tell the bootloader that the
+	 * current image is confirmed to be working.
+	 */
+	boot_write_img_confirmed();
 
-		module_enqueue_msg(&self, &msg);
-	}
-
-	if (is_modem_module_event(eh)) {
-		struct modem_module_event *event = cast_modem_module_event(eh);
-		struct cloud_msg_data msg = {
-			.module.modem = *event
-		};
-
-		module_enqueue_msg(&self, &msg);
-	}
-
-	if (is_cloud_module_event(eh)) {
-		struct cloud_module_event *event = cast_cloud_module_event(eh);
-		struct cloud_msg_data msg = {
-			.module.cloud = *event
-		};
-
-		module_enqueue_msg(&self, &msg);
-	}
-
-	if (is_util_module_event(eh)) {
-		struct util_module_event *event = cast_util_module_event(eh);
-		struct cloud_msg_data msg = {
-			.module.util = *event
-		};
-
-		module_enqueue_msg(&self, &msg);
-	}
-
-	if (is_gps_module_event(eh)) {
-		struct gps_module_event *event = cast_gps_module_event(eh);
-		struct cloud_msg_data msg = {
-			.module.gps = *event
-		};
-
-		module_enqueue_msg(&self, &msg);
-	}
-
-	return false;
+	return 0;
 }
 
-static void on_state_lte_connected(struct cloud_msg_data *cloud_msg)
+/* Message handler for STATE_LTE_CONNECTED. */
+static void on_state_lte_connected(struct cloud_msg_data *msg)
 {
-	if (IS_EVENT(cloud_msg, modem, MODEM_EVT_LTE_DISCONNECTED)) {
+	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_DISCONNECTED)) {
 		state_set(STATE_LTE_DISCONNECTED);
 		sub_state_set(SUB_STATE_CLOUD_DISCONNECTED);
 
@@ -351,18 +456,19 @@ static void on_state_lte_connected(struct cloud_msg_data *cloud_msg)
 	}
 
 #if defined(CONFIG_AGPS) && defined(CONFIG_AGPS_SRC_SUPL)
-	if (IS_EVENT(cloud_msg, gps, GPS_EVT_AGPS_NEEDED)) {
+	if (IS_EVENT(msg, gps, GPS_EVT_AGPS_NEEDED)) {
 		int err;
 
-		err = gps_agps_request(cloud_msg->module.gps.data.agps_request,
+		err = gps_agps_request(msg->module.gps.data.agps_request,
 				       GPS_SOCKET_NOT_PROVIDED);
 		if (err) {
 			LOG_WRN("Failed to request A-GPS data, error: %d", err);
 		}
 	}
-#endif /* CONFIG_AGPS && CONFIG_AGPS_SRC_SUPL*/
+#endif /* CONFIG_AGPS && CONFIG_AGPS_SRC_SUPL */
 }
 
+/* Message handler for STATE_LTE_DISCONNECTED. */
 static void on_state_lte_disconnected(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTED)) {
@@ -373,6 +479,7 @@ static void on_state_lte_disconnected(struct cloud_msg_data *msg)
 	}
 }
 
+/* Message handler for SUB_STATE_CLOUD_CONNECTED. */
 static void on_sub_state_cloud_connected(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_DISCONNECTED)) {
@@ -418,6 +525,7 @@ static void on_sub_state_cloud_connected(struct cloud_msg_data *msg)
 	}
 }
 
+/* Message handler for SUB_STATE_CLOUD_DISCONNECTED. */
 static void on_sub_state_cloud_disconnected(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, cloud, CLOUD_EVT_CONNECTED)) {
@@ -432,6 +540,7 @@ static void on_sub_state_cloud_disconnected(struct cloud_msg_data *msg)
 	}
 }
 
+/* Message handler for all states. */
 static void on_all_states(struct cloud_msg_data *msg)
 {
 	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {
@@ -440,7 +549,8 @@ static void on_all_states(struct cloud_msg_data *msg)
 
 	if (is_data_module_event(&msg->module.data.header)) {
 		switch (msg->module.data.type) {
-		case DATA_EVT_CONFIG_INIT: /* Fall through. */
+		case DATA_EVT_CONFIG_INIT:
+			/* Fall through. */
 		case DATA_EVT_CONFIG_READY:
 			copy_cfg = msg->module.data.data.cfg;
 			break;
@@ -450,103 +560,10 @@ static void on_all_states(struct cloud_msg_data *msg)
 	}
 }
 
-static void cloud_wrap_event_handler(const struct cloud_wrap_event *const evt)
-{
-	switch (evt->type) {
-	case CLOUD_WRAP_EVT_CONNECTING: {
-		LOG_DBG("CLOUD_WRAP_EVT_CONNECTING");
-		SEND_EVENT(cloud, CLOUD_EVT_CONNECTING);
-		break;
-	}
-	case CLOUD_WRAP_EVT_CONNECTED: {
-		LOG_DBG("CLOUD_WRAP_EVT_CONNECTED");
-		SEND_EVENT(cloud, CLOUD_EVT_CONNECTED);
-		break;
-	}
-	case CLOUD_WRAP_EVT_DISCONNECTED: {
-		LOG_DBG("CLOUD_WRAP_EVT_DISCONNECTED");
-		SEND_EVENT(cloud, CLOUD_EVT_DISCONNECTED);
-		break;
-	}
-	case CLOUD_WRAP_EVT_DATA_RECEIVED:
-		LOG_DBG("CLOUD_WRAP_EVT_DATA_RECEIVED");
-
-		int err;
-
-		/* Use the config copy when populating the config variable
-		 * before it is sent to the Data module. This way we avoid
-		 * sending uninitialized variables to the Data module.
-		 */
-
-		err = cloud_codec_decode_config(evt->data.buf, &copy_cfg);
-		if (err == 0) {
-			LOG_DBG("Device configuration encoded");
-			send_config_received();
-			break;
-		} else if (err == -ENODATA) {
-			LOG_WRN("Device configuration empty!");
-		} else {
-			LOG_ERR("Decoding of device configuration, error: %d",
-				err);
-			SEND_ERROR(cloud, CLOUD_EVT_ERROR, err);
-			break;
-		}
-
-#if defined(CONFIG_AGPS)
-		err = gps_process_agps_data(evt->data.buf, evt->data.len);
-		if (err) {
-			LOG_WRN("Unable to process agps data, error: %d", err);
-		}
-#endif
-		break;
-	case CLOUD_WRAP_EVT_FOTA_DONE: {
-		LOG_DBG("CLOUD_WRAP_EVT_FOTA_DONE");
-		SEND_EVENT(cloud, CLOUD_EVT_FOTA_DONE);
-		break;
-	}
-	case CLOUD_WRAP_EVT_FOTA_START: {
-		LOG_DBG("CLOUD_WRAP_EVT_FOTA_START");
-		break;
-	}
-	case CLOUD_WRAP_EVT_FOTA_ERASE_PENDING:
-		LOG_DBG("CLOUD_WRAP_EVT_FOTA_ERASE_PENDING");
-		break;
-	case CLOUD_WRAP_EVT_FOTA_ERASE_DONE:
-		LOG_DBG("CLOUD_WRAP_EVT_FOTA_ERASE_DONE");
-		break;
-	case CLOUD_WRAP_EVT_ERROR: {
-		LOG_DBG("CLOUD_WRAP_EVT_ERROR");
-		SEND_ERROR(cloud, CLOUD_EVT_ERROR, evt->err);
-		break;
-	}
-	default:
-		break;
-
-	}
-}
-
-static int setup(void)
-{
-	int err;
-
-	err = cloud_wrap_init(cloud_wrap_event_handler);
-	if (err) {
-		LOG_ERR("cloud_wrap_init, error: %d", err);
-		return err;
-	}
-
-	/* After a successful initializaton, tell the bootloader that the
-	 * current image is confirmed to be working.
-	 */
-	boot_write_img_confirmed();
-
-	return 0;
-}
-
 static void cloud_module(void)
 {
 	int err;
-	struct cloud_msg_data cloud_msg;
+	struct cloud_msg_data msg;
 
 	self.thread_id = k_current_get();
 
@@ -564,33 +581,33 @@ static void cloud_module(void)
 	}
 
 	while (true) {
-		module_get_next_msg(&self, &cloud_msg);
+		module_get_next_msg(&self, &msg);
 
 		switch (state) {
 		case STATE_LTE_CONNECTED:
 			switch (sub_state) {
 			case SUB_STATE_CLOUD_CONNECTED:
-				on_sub_state_cloud_connected(&cloud_msg);
+				on_sub_state_cloud_connected(&msg);
 				break;
 			case SUB_STATE_CLOUD_DISCONNECTED:
-				on_sub_state_cloud_disconnected(&cloud_msg);
+				on_sub_state_cloud_disconnected(&msg);
 				break;
 			default:
 				LOG_ERR("Unknown Cloud module sub state");
 				break;
 			}
 
-			on_state_lte_connected(&cloud_msg);
+			on_state_lte_connected(&msg);
 			break;
 		case STATE_LTE_DISCONNECTED:
-			on_state_lte_disconnected(&cloud_msg);
+			on_state_lte_disconnected(&msg);
 			break;
 		default:
 			LOG_ERR("Unknown Cloud module state.");
 			break;
 		}
 
-		on_all_states(&cloud_msg);
+		on_all_states(&msg);
 	}
 }
 

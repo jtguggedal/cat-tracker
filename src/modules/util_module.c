@@ -24,16 +24,37 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_UTIL_MODULE_LOG_LEVEL);
 
-static struct module_data self = {
-	.name = "util",
+struct util_msg_data {
+	union {
+		struct cloud_module_event cloud;
+		struct ui_module_event ui;
+		struct sensor_module_event sensor;
+		struct data_module_event data;
+		struct app_module_event app;
+		struct gps_module_event gps;
+		struct modem_module_event modem;
+		struct output_module_event output;
+	} module;
 };
 
-/* Util module states. */
+/* Util module super states. */
 static enum state_type {
 	STATE_INIT,
 	STATE_REBOOT_PENDING
 } state;
 
+static struct k_delayed_work reboot_work;
+
+static struct module_data self = {
+	.name = "util",
+	.msg_q = NULL,
+};
+
+/* Forward declarations. */
+static void message_handler(struct util_msg_data *msg);
+static void send_reboot_request(void);
+
+/* Convenience functions used in internal state handling. */
 static char *state2str(enum state_type new_state)
 {
 	switch (new_state) {
@@ -60,76 +81,7 @@ static void state_set(enum state_type new_state)
 	state = new_state;
 }
 
-struct util_msg_data {
-	union {
-		struct cloud_module_event cloud;
-		struct ui_module_event ui;
-		struct sensor_module_event sensor;
-		struct data_module_event data;
-		struct app_module_event app;
-		struct gps_module_event gps;
-		struct modem_module_event modem;
-		struct output_module_event output;
-	} module;
-};
-
-static void message_handler(struct util_msg_data *msg);
-
-static struct k_delayed_work reboot_work;
-
-static void reboot(void)
-{
-	LOG_ERR("Rebooting!");
-#if !defined(CONFIG_DEBUG) && defined(CONFIG_REBOOT)
-	LOG_PANIC();
-	sys_reboot(0);
-#else
-	while (true) {
-		k_cpu_idle();
-	}
-#endif
-}
-
-static void reboot_work_fn(struct k_work *work)
-{
-	reboot();
-}
-
-static void send_reboot_request(void)
-{
-	/* Flag ensuring that multiple reboot requests are not emitted
-	 * upon an error from multiple modules.
-	 */
-	static bool error_signaled;
-
-	if (!error_signaled) {
-		struct util_module_event *util_module_event =
-				new_util_module_event();
-
-		util_module_event->type = UTIL_EVT_SHUTDOWN_REQUEST;
-
-		k_delayed_work_submit(&reboot_work,
-				      K_SECONDS(CONFIG_REBOOT_TIMEOUT));
-
-		EVENT_SUBMIT(util_module_event);
-
-		error_signaled = true;
-	}
-}
-
-void bsd_recoverable_error_handler(uint32_t err)
-{
-	send_reboot_request();
-}
-
-void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
-{
-	ARG_UNUSED(esf);
-
-	LOG_PANIC();
-	send_reboot_request();
-}
-
+/* Handlers */
 static bool event_handler(const struct event_header *eh)
 {
 	if (is_modem_module_event(eh)) {
@@ -209,13 +161,69 @@ static bool event_handler(const struct event_header *eh)
 	return false;
 }
 
+void bsd_recoverable_error_handler(uint32_t err)
+{
+	send_reboot_request();
+}
+
+void k_sys_fatal_error_handler(unsigned int reason, const z_arch_esf_t *esf)
+{
+	ARG_UNUSED(esf);
+
+	LOG_PANIC();
+	send_reboot_request();
+}
+
+/* Static module functions. */
+static void reboot(void)
+{
+	LOG_ERR("Rebooting!");
+#if !defined(CONFIG_DEBUG) && defined(CONFIG_REBOOT)
+	LOG_PANIC();
+	sys_reboot(0);
+#else
+	while (true) {
+		k_cpu_idle();
+	}
+#endif
+}
+
+static void reboot_work_fn(struct k_work *work)
+{
+	reboot();
+}
+
+static void send_reboot_request(void)
+{
+	/* Flag ensuring that multiple reboot requests are not emitted
+	 * upon an error from multiple modules.
+	 */
+	static bool error_signaled;
+
+	if (!error_signaled) {
+		struct util_module_event *util_module_event =
+				new_util_module_event();
+
+		util_module_event->type = UTIL_EVT_SHUTDOWN_REQUEST;
+
+		k_delayed_work_submit(&reboot_work,
+				      K_SECONDS(CONFIG_REBOOT_TIMEOUT));
+
+		EVENT_SUBMIT(util_module_event);
+
+		error_signaled = true;
+	}
+}
+
+/* Message handler for all states. */
 static void on_all_states(struct util_msg_data *msg)
 {
 	static int reboot_ack_cnt;
 
 	if (is_cloud_module_event(&msg->module.cloud.header)) {
 		switch (msg->module.cloud.type) {
-		case CLOUD_EVT_ERROR: /* Fall-through */
+		case CLOUD_EVT_ERROR:
+			/* Fall through. */
 		case CLOUD_EVT_FOTA_DONE:
 			send_reboot_request();
 			break;

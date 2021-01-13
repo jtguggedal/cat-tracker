@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _MODEM_EVENT_H_
-#define _MODEM_EVENT_H_
+#ifndef _MODEM_MODULE_EVENT_H_
+#define _MODEM_MODULE_EVENT_H_
 
 /**
- * @brief Modem Event
- * @defgroup modem_module_event Modem Event
+ * @brief Modem module event
+ * @defgroup modem_module_event Modem module event
  * @{
  */
 
@@ -112,4 +112,4 @@ EVENT_TYPE_DECLARE(modem_module_event);
  * @}
  */
 
-#endif /* _MODEM_EVENT_H_ */
+#endif /* _MODEM_MODULE_EVENT_H_ */

@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _UI_EVENT_H_
-#define _UI_EVENT_H_
+#ifndef _UI_MODULE_EVENT_H_
+#define _UI_MODULE_EVENT_H_
 
 /**
- * @brief UI Event
- * @defgroup ui_module_event UI Event
+ * @brief UI module event
+ * @defgroup ui_module_event UI module event
  * @{
  */
 
@@ -52,4 +52,4 @@ EVENT_TYPE_DECLARE(ui_module_event);
  * @}
  */
 
-#endif /* _UI_EVENT_H_ */
+#endif /* _UI_MODULE_EVENT_H_ */

@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _cloud_module_event_H_
-#define _cloud_module_event_H_
+#ifndef _CLOUD_MODULE_EVENT_H_
+#define _CLOUD_MODULE_EVENT_H_
 
 /**
- * @brief Cloud Event
- * @defgroup cloud_module_event Cloud Event
+ * @brief Cloud module event
+ * @defgroup cloud_module_event Cloud module event
  * @{
  */
 
@@ -60,4 +60,4 @@ EVENT_TYPE_DECLARE(cloud_module_event);
  * @}
  */
 
-#endif /* _cloud_module_event_H_ */
+#endif /* _CLOUD_MODULE_EVENT_H_ */

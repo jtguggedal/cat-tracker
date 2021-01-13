@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _SENSOR_EVENT_H_
-#define _SENSOR_EVENT_H_
+#ifndef _SENSOR_MODULE_EVENT_H_
+#define _SENSOR_MODULE_EVENT_H_
 
 /**
- * @brief Sensor Event
- * @defgroup sensor_module_event Sensor Event
+ * @brief Sensor module event
+ * @defgroup sensor_module_event Sensor module event
  * @{
  */
 
@@ -62,4 +62,4 @@ EVENT_TYPE_DECLARE(sensor_module_event);
  * @}
  */
 
-#endif /* _SENSOR_EVENT_H_ */
+#endif /* _SENSOR_MODULE_EVENT_H_ */

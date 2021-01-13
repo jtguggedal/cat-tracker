@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _APP_EVENT_H_
-#define _APP_EVENT_H_
+#ifndef _APP_MODULE_EVENT_H_
+#define _APP_MODULE_EVENT_H_
 
 /**
- * @brief Application Event
- * @defgroup app_module_event Application Event
+ * @brief Application module event
+ * @defgroup app_module_event Application module event
  * @{
  */
 
@@ -104,4 +104,4 @@ EVENT_TYPE_DECLARE(app_module_event);
  * @}
  */
 
-#endif /* _APP_EVENT_H_ */
+#endif /* _APP_MODULE_EVENT_H_ */

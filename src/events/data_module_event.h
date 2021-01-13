@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _DATA_EVENT_H_
-#define _DATA_EVENT_H_
+#ifndef _DATA_MODULE_EVENT_H_
+#define _DATA_MODULE_EVENT_H_
 
 /**
- * @brief Data Event
- * @defgroup data_module_event Data Event
+ * @brief Data module event
+ * @defgroup data_module_event Data module event
  * @{
  */
 
@@ -65,4 +65,4 @@ EVENT_TYPE_DECLARE(data_module_event);
  * @}
  */
 
-#endif /* _DATA_EVENT_H_ */
+#endif /* _DATA_MODULE_EVENT_H_ */

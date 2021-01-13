@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
-#ifndef _OUTPUT_EVENT_H_
-#define _OUTPUT_EVENT_H_
+#ifndef _OUTPUT_MODULE_EVENT_H_
+#define _OUTPUT_MODULE_EVENT_H_
 
 /**
- * @brief Output Event
- * @defgroup output_module_event Output Event
+ * @brief Output module event
+ * @defgroup output_module_event Output module event
  * @{
  */
 
@@ -44,4 +44,4 @@ EVENT_TYPE_DECLARE(output_module_event);
  * @}
  */
 
-#endif /* _OUTPUT_EVENT_H_ */
+#endif /* _OUTPUT_MODULE_EVENT_H_ */

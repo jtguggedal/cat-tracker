@@ -227,7 +227,7 @@ static void check_modem_fw_version(void)
 		LOG_WRN("Unsupported modem firmware version: %s",
 			log_strdup(modem_param.device.modem_fw.value_string));
 		LOG_WRN("Expected firmware version: %s",
-			CONFIG_EXPECTED_MODEM_FIRMWARE_VERSION);
+			log_strdup(CONFIG_EXPECTED_MODEM_FIRMWARE_VERSION));
 		LOG_WRN("You can change the expected version through the");
 		LOG_WRN("EXPECTED_MODEM_FIRMWARE_VERSION setting.");
 		LOG_WRN("Please upgrade: http://bit.ly/nrf9160-mfw-update");

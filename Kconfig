@@ -8,6 +8,7 @@ menu "Cat Tracker"
 
 config CAT_TRACKER_APP_VERSION
 	string "Cat Tracker application firmware version"
+	default AZURE_FOTA_APP_VERSION if AZURE_IOT_HUB && AZURE_FOTA && !AZURE_FOTA_APP_VERSION_AUTO
 	default "0.0.0-development"
 
 rsource "src/modules/Kconfig.modules_common"

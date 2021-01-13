@@ -108,6 +108,7 @@ static int static_modem_data_add(cJSON *parent,
 	err += json_add_number(static_m_v, MODEM_CURRENT_BAND, data->bnd);
 	err += json_add_str(static_m_v, MODEM_NETWORK_MODE, nw_mode);
 	err += json_add_str(static_m_v, MODEM_ICCID, data->iccid);
+	err += json_add_str(static_m_v, MODEM_APP_VERSION, data->appv);
 	err += json_add_str(static_m_v, MODEM_FIRMWARE_VERSION, data->fw);
 	err += json_add_str(static_m_v, MODEM_BOARD, data->brdv);
 

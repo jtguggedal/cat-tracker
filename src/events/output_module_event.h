@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 /** @brief output event types submitted by output module. */
-enum output_module_event_types {
+enum output_module_event_type {
 	OUTPUT_EVT_SHUTDOWN_READY,
 	OUTPUT_EVT_ERROR
 };
@@ -28,7 +28,7 @@ enum output_module_event_types {
 /** @brief output event. */
 struct output_module_event {
 	struct event_header header;
-	enum output_module_event_types type;
+	enum output_module_event_type type;
 	union {
 		int err;
 	} data;

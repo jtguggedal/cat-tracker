@@ -19,14 +19,14 @@
 extern "C" {
 #endif
 
-enum util_module_event_types {
+enum util_module_event_type {
 	UTIL_EVT_SHUTDOWN_REQUEST
 };
 
 /** @brief Util event. */
 struct util_module_event {
 	struct event_header header;
-	enum util_module_event_types type;
+	enum util_module_event_type type;
 };
 
 EVENT_TYPE_DECLARE(util_module_event);

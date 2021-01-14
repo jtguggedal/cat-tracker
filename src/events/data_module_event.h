@@ -21,7 +21,7 @@ extern "C" {
 #endif
 
 /** @brief Data event types submitted by Data module. */
-enum data_module_event_types {
+enum data_module_event_type {
 	DATA_EVT_DATA_READY,
 	DATA_EVT_DATA_SEND,
 	DATA_EVT_DATA_SEND_BATCH,
@@ -45,7 +45,7 @@ struct data_module_data_buffers {
 /** @brief Data event. */
 struct data_module_event {
 	struct event_header header;
-	enum data_module_event_types type;
+	enum data_module_event_type type;
 
 	union {
 		struct data_module_data_buffers buffer;

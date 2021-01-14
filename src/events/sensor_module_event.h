@@ -22,7 +22,7 @@ extern "C" {
 #define ACCELEROMETER_AXIS_COUNT 3
 
 /** @brief Sensor event types su bmitted by Sensor module. */
-enum sensor_module_event_types {
+enum sensor_module_event_type {
 	SENSOR_EVT_MOVEMENT_DATA_READY,
 	SENSOR_EVT_ENVIRONMENTAL_DATA_READY,
 	SENSOR_EVT_ENVIRONMENTAL_NOT_SUPPORTED,
@@ -44,7 +44,7 @@ struct sensor_module_accel_data {
 /** @brief Sensor event. */
 struct sensor_module_event {
 	struct event_header header;
-	enum sensor_module_event_types type;
+	enum sensor_module_event_type type;
 	union {
 		struct sensor_module_data sensors;
 		struct sensor_module_accel_data accel;

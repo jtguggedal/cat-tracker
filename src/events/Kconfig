@@ -46,6 +46,22 @@ config OUTPUT_EVENTS_LOG
 	bool "Enable logging for output module events"
 	default y
 
+if PROFILER
+
+choice
+	prompt "Event type format for profiler"
+	default PROFILER_EVENT_TYPE_INT
+
+config PROFILER_EVENT_TYPE_STRING
+	bool "Event type as string"
+
+config PROFILER_EVENT_TYPE_INT
+	bool "Event type as integer"
+
+endchoice
+
+endif # PROFILER
+
 endmenu
 
 endif

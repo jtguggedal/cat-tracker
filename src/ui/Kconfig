@@ -6,6 +6,7 @@
 
 menuconfig USE_UI_MODULE
 	bool "LED module"
+	select DK_LIBRARY
 
 if USE_UI_MODULE
 

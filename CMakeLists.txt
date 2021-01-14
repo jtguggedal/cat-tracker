@@ -19,8 +19,9 @@ zephyr_include_directories(src)
 # Application directories
 add_subdirectory(src/modules)
 add_subdirectory(src/events)
-add_subdirectory(src/ui)
-add_subdirectory(src/cloud)
 add_subdirectory(src/cloud/cloud_codec)
-add_subdirectory(src/ext_sensors)
+
+add_subdirectory_ifdef(CONFIG_CLOUD_MODULE src/cloud)
+add_subdirectory_ifdef(CONFIG_OUTPUT_MODULE src/ui)
+add_subdirectory_ifdef(CONFIG_SENSOR_MODULE src/ext_sensors)
 add_subdirectory_ifdef(CONFIG_WATCHDOG_APPLICATION src/watchdog)

@@ -6,6 +6,8 @@
 
 menuconfig MODEM_MODULE
 	bool "Modem module"
+	select LTE_LINK_CONTROL
+	select MODEM_INFO
 	default y
 
 if MODEM_MODULE

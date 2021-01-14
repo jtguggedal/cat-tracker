@@ -715,7 +715,8 @@ static void on_all_states(struct data_msg_data *msg)
 		};
 
 		cloud_codec_populate_ui_buffer(ui_buf, &new_ui_data,
-					       &head_ui_buf);
+					       &head_ui_buf,
+					       ARRAY_SIZE(ui_buf));
 
 		SEND_EVENT(data, DATA_EVT_UI_DATA_READY);
 		return;
@@ -758,9 +759,11 @@ static void on_all_states(struct data_msg_data *msg)
 			.queued = true
 		};
 
-		cloud_codec_populate_modem_dynamic_buffer(modem_dyn_buf,
-							  &new_modem_data,
-							  &head_modem_dyn_buf);
+		cloud_codec_populate_modem_dynamic_buffer(
+						modem_dyn_buf,
+						&new_modem_data,
+						&head_modem_dyn_buf,
+						ARRAY_SIZE(modem_dyn_buf));
 
 		data_status_set(APP_DATA_MODEM_DYNAMIC);
 	}
@@ -777,7 +780,8 @@ static void on_all_states(struct data_msg_data *msg)
 		};
 
 		cloud_codec_populate_bat_buffer(bat_buf, &new_battery_data,
-						&head_bat_buf);
+						&head_bat_buf,
+						ARRAY_SIZE(bat_buf));
 
 		data_status_set(APP_DATA_BATTERY);
 	}
@@ -792,7 +796,8 @@ static void on_all_states(struct data_msg_data *msg)
 
 		cloud_codec_populate_sensor_buffer(sensors_buf,
 						   &new_sensor_data,
-						   &head_sensor_buf);
+						   &head_sensor_buf,
+						   ARRAY_SIZE(sensors_buf));
 
 		data_status_set(APP_DATA_ENVIRONMENTAL);
 	}
@@ -816,7 +821,8 @@ static void on_all_states(struct data_msg_data *msg)
 		};
 
 		cloud_codec_populate_accel_buffer(accel_buf, &new_movement_data,
-						  &head_accel_buf);
+						  &head_accel_buf,
+						  ARRAY_SIZE(accel_buf));
 	}
 
 	if (IS_EVENT(msg, gps, GPS_EVT_DATA_READY)) {
@@ -832,7 +838,8 @@ static void on_all_states(struct data_msg_data *msg)
 		};
 
 		cloud_codec_populate_gps_buffer(gps_buf, &new_gps_data,
-						&head_gps_buf);
+						&head_gps_buf,
+						ARRAY_SIZE(gps_buf));
 
 		data_status_set(APP_DATA_GNSS);
 	}

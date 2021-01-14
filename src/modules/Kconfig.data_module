@@ -6,6 +6,7 @@
 
 menuconfig DATA_MODULE
 	bool "Data module"
+	select DATE_TIME
 	default y
 
 if DATA_MODULE
@@ -14,7 +15,29 @@ config DATA_THREAD_STACK_SIZE
 	int "Data module thread stack size"
 	default 2048
 
-rsource "../cloud/cloud_codec/Kconfig"
+config GPS_BUFFER_MAX
+	int "GPS data ringbuffer entries"
+	default 20
+
+config SENSOR_BUFFER_MAX
+	int "Sensor data ringbuffer entries"
+	default 20
+
+config MODEM_BUFFER_DYNAMIC_MAX
+	int "Dynamic modem data ringbuffer entries"
+	default 20
+
+config UI_BUFFER_MAX
+	int "UI data ringbuffer entries"
+	default 20
+
+config ACCEL_BUFFER_MAX
+	int "Accelerometer data ringbuffer entries"
+	default 20
+
+config BAT_BUFFER_MAX
+	int "Battery data ringbuffer entries"
+	default 20
 
 endif # DATA_MODULE
 

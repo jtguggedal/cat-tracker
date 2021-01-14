@@ -190,29 +190,35 @@ int cloud_codec_encode_batch_data(
 void cloud_codec_populate_sensor_buffer(
 				struct cloud_data_sensors *sensor_buffer,
 				struct cloud_data_sensors *new_sensor_data,
-				int *head_sensor_buf);
+				int *head_sensor_buf,
+				size_t buffer_count);
 
 void cloud_codec_populate_ui_buffer(struct cloud_data_ui *ui_buffer,
 				    struct cloud_data_ui *new_ui_data,
-				    int *head_ui_buf);
+				    int *head_ui_buf,
+				    size_t buffer_count);
 
 void cloud_codec_populate_accel_buffer(
 				struct cloud_data_accelerometer *accel_buf,
 				struct cloud_data_accelerometer *new_accel_data,
-				int *head_accel_buf);
+				int *head_accel_buf,
+				size_t buffer_count);
 
 void cloud_codec_populate_bat_buffer(struct cloud_data_battery *bat_buffer,
 				     struct cloud_data_battery *new_bat_data,
-				     int *head_bat_buf);
+				     int *head_bat_buf,
+				     size_t buffer_count);
 
 void cloud_codec_populate_gps_buffer(struct cloud_data_gps *gps_buffer,
 				     struct cloud_data_gps *new_gps_data,
-				     int *head_gps_buf);
+				     int *head_gps_buf,
+				     size_t buffer_count);
 
 void cloud_codec_populate_modem_dynamic_buffer(
 				struct cloud_data_modem_dynamic *modem_buffer,
 				struct cloud_data_modem_dynamic *new_modem_data,
-				int *head_modem_buf);
+				int *head_modem_buf,
+				size_t buffer_count);
 
 static inline void cloud_codec_release_data(struct cloud_codec_data *output)
 {

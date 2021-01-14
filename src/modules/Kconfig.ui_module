@@ -6,6 +6,7 @@
 
 menuconfig UI_MODULE
 	bool "User Interface module"
+	select DK_LIBRARY
 	default y
 
 if UI_MODULE

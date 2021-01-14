@@ -4,39 +4,6 @@
 # SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
 #
 
-menuconfig CLOUD_CODEC
-	bool "Cloud codec and ringbuffer"
-	select CJSON_LIB if AZURE_IOT_HUB || AWS_IOT || NRF_CLOUD
-	default y
-
-if CLOUD_CODEC
-
-config GPS_BUFFER_MAX
-	int "GPS data ringbuffer entries"
-	default 20
-
-config SENSOR_BUFFER_MAX
-	int "Sensor data ringbuffer entries"
-	default 20
-
-config MODEM_BUFFER_DYNAMIC_MAX
-	int "Dynamic modem data ringbuffer entries"
-	default 20
-
-config UI_BUFFER_MAX
-	int "UI data ringbuffer entries"
-	default 20
-
-config ACCEL_BUFFER_MAX
-	int "Accelerometer data ringbuffer entries"
-	default 20
-
-config BAT_BUFFER_MAX
-	int "Battery data ringbuffer entries"
-	default 20
-
-endif # CLOUD_CODEC
-
 module = CLOUD_CODEC
 module-str = Cloud codec
 source "subsys/logging/Kconfig.template.log_config"

@@ -6,6 +6,8 @@
 
 menuconfig GPS_MODULE
 	bool "GPS module"
+	select NRF9160_GPS
+	select DATE_TIME
 	default y
 
 if GPS_MODULE

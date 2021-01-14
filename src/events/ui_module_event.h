@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 /** @brief UI event types submitted by UI module. */
-enum ui_module_event_types {
+enum ui_module_event_type {
 	UI_EVT_BUTTON_DATA_READY,
 	UI_EVT_SHUTDOWN_READY,
 	UI_EVT_ERROR
@@ -34,7 +34,7 @@ struct ui_module_data {
 /** @brief UI event. */
 struct ui_module_event {
 	struct event_header header;
-	enum ui_module_event_types type;
+	enum ui_module_event_type type;
 
 	union {
 		struct ui_module_data ui;

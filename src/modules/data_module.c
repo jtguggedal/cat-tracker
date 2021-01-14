@@ -357,7 +357,7 @@ static int setup(void)
 	return 0;
 }
 
-static void config_distribute(enum data_module_event_types type)
+static void config_distribute(enum data_module_event_type type)
 {
 	struct data_module_event *data_module_event = new_data_module_event();
 

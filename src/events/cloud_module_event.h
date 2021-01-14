@@ -21,7 +21,7 @@ extern "C" {
 #endif
 
 /** @brief Cloud event types submitted by Cloud module. */
-enum cloud_module_event_types {
+enum cloud_module_event_type {
 	CLOUD_EVT_CONNECTED,
 	CLOUD_EVT_DISCONNECTED,
 	CLOUD_EVT_CONNECTING,
@@ -41,7 +41,7 @@ struct cloud_module_event_data {
 /** @brief Cloud event. */
 struct cloud_module_event {
 	struct event_header header;
-	enum cloud_module_event_types type;
+	enum cloud_module_event_type type;
 
 	union {
 		struct cloud_data_cfg config;

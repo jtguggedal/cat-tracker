@@ -1,6 +1,6 @@
 #include <zephyr.h>
 
-enum cloud_wrap_event_types {
+enum cloud_wrap_event_type {
 	/* Cloud integration layer is connecting. */
 	CLOUD_WRAP_EVT_CONNECTING,
 	/* Cloud integration layer iss connected. */
@@ -30,7 +30,7 @@ struct cloud_wrap_event_data {
 };
 
 struct cloud_wrap_event {
-	enum cloud_wrap_event_types type;
+	enum cloud_wrap_event_type type;
 
 	union {
 		struct cloud_wrap_event_data data;

@@ -865,6 +865,8 @@ static void data_module(void)
 
 	state_set(STATE_CLOUD_DISCONNECTED);
 
+	k_delayed_work_init(&data_send_work, data_send_work_fn);
+
 	err = setup();
 	if (err) {
 		LOG_ERR("setup, error: %d", err);

@@ -36,6 +36,9 @@ static int log_cloud_module_event(const struct event_header *eh, char *buf,
 	case CLOUD_EVT_SHUTDOWN_READY:
 		strcpy(event_name, "CLOUD_EVT_SHUTDOWN_READY");
 		break;
+	case CLOUD_EVT_FOTA_DONE:
+		strcpy(event_name, "CLOUD_EVT_FOTA_DONE");
+		break;
 	case CLOUD_EVT_ERROR:
 		strcpy(event_name, "CLOUD_EVT_ERROR");
 		return snprintf(buf, buf_len, "%s - Error code %d",

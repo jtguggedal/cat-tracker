@@ -1,20 +1,20 @@
 /*
- * Copyright (c) 2019-2020 Nordic Semiconductor ASA
+ * Copyright (c) 2019-2021 Nordic Semiconductor ASA
  *
  * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
  */
 
 #include <logging/log.h>
 
-#include "ui.h"
+#include "led.h"
 #include "led_pwm.h"
 #include <device.h>
 
-LOG_MODULE_REGISTER(ui, CONFIG_UI_LOG_LEVEL);
+LOG_MODULE_REGISTER(led, CONFIG_LED_CONTROL_LOG_LEVEL);
 
-static enum ui_led_pattern current_led_state;
+static enum led_pattern current_led_state;
 
-#if !defined(CONFIG_UI_LED_USE_PWM)
+#if !defined(CONFIG_LED_USE_PWM)
 static struct k_delayed_work leds_update_work;
 
 /**@brief Update LEDs state. */
@@ -25,19 +25,19 @@ static void leds_update(struct k_work *work)
 	static uint8_t current_led_on_mask;
 	uint8_t led_on_mask;
 
-	if (current_led_state == UI_LED_PASSIVE_MODE) {
+	if (current_led_state == LED_PASSIVE_MODE) {
 		passive_mode = true;
 	} else {
 		passive_mode = false;
 	}
 
-	led_on_mask = UI_LED_GET_ON(current_led_state);
+	led_on_mask = LED_GET_ON(current_led_state);
 	led_on = !led_on;
 
 	if (led_on) {
-		led_on_mask |= UI_LED_GET_BLINK(current_led_state);
+		led_on_mask |= LED_GET_BLINK(current_led_state);
 	} else {
-		led_on_mask &= ~UI_LED_GET_BLINK(current_led_state);
+		led_on_mask &= ~LED_GET_BLINK(current_led_state);
 	}
 
 	if (led_on_mask != current_led_on_mask) {
@@ -50,43 +50,43 @@ static void leds_update(struct k_work *work)
 	if (work) {
 		if (led_on) {
 			k_delayed_work_submit(&leds_update_work,
-					      K_MSEC(UI_LED_ON_PERIOD_NORMAL));
+					      K_MSEC(LED_ON_PERIOD_NORMAL));
 		} else {
 			if (passive_mode) {
 				k_delayed_work_submit(
 					&leds_update_work,
-					K_MSEC(UI_LED_OFF_PERIOD_LONG));
+					K_MSEC(LED_OFF_PERIOD_LONG));
 			} else {
 				k_delayed_work_submit(
 					&leds_update_work,
-					K_MSEC(UI_LED_OFF_PERIOD_NORMAL));
+					K_MSEC(LED_OFF_PERIOD_NORMAL));
 			}
 		}
 	}
 }
-#endif /* CONFIG_UI_LED_USE_PWM */
+#endif /* CONFIG_LED_USE_PWM */
 
-void ui_led_set_pattern(enum ui_led_pattern state)
+void led_set_pattern(enum led_pattern state)
 {
 	current_led_state = state;
-#ifdef CONFIG_UI_LED_USE_PWM
-	ui_led_set_effect(state);
-#endif /* CONFIG_UI_LED_USE_PWM */
+#if defined(CONFIG_LED_USE_PWM)
+	led_pwm_set_effect(state);
+#endif
 }
 
-enum ui_led_pattern ui_led_get_pattern(void)
+enum led_pattern led_get_pattern(void)
 {
 	return current_led_state;
 }
 
-static int ui_init(const struct device *dev)
+static int led_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
 	int err = 0;
 
-#ifdef CONFIG_UI_LED_USE_PWM
-	err = ui_leds_init();
+#if defined(CONFIG_LED_USE_PWM)
+	err = led_pwm_init();
 	if (err) {
 		LOG_ERR("Error when initializing PWM controlled LEDs");
 		return err;
@@ -106,16 +106,16 @@ static int ui_init(const struct device *dev)
 
 	k_delayed_work_init(&leds_update_work, leds_update);
 	k_delayed_work_submit(&leds_update_work, K_NO_WAIT);
-#endif /* CONFIG_UI_LED_USE_PWM */
+#endif /* CONFIG_LED_USE_PWM */
 
 	return 0;
 }
 
-void ui_stop_leds(void)
+void led_stop(void)
 {
-#ifdef CONFIG_UI_LED_USE_PWM
-	ui_leds_stop();
+#if defined(CONFIG_LED_USE_PWM)
+	led_pwm_stop();
 #endif
 }
 
-SYS_INIT(ui_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+SYS_INIT(led_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);

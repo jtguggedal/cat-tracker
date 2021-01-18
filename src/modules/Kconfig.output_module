@@ -6,7 +6,7 @@
 
 menuconfig OUTPUT_MODULE
 	bool "Output module"
-	select USE_UI_MODULE
+	select LED_CONTROL
 	default y
 
 if OUTPUT_MODULE
@@ -15,7 +15,7 @@ config OUTPUT_THREAD_STACK_SIZE
 	int "Output module thread stack size"
 	default 512
 
-rsource "../ui/Kconfig"
+rsource "../led/Kconfig"
 
 endif # OUTPUT_MODULE
 

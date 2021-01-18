@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <event_manager.h>
 
-#include "ui.h"
+#include "led.h"
 
 #define MODULE output_module
 
@@ -191,30 +191,30 @@ static bool event_handler(const struct event_header *eh)
 /* Static module functions. */
 static void led_pat_active_work_fn(struct k_work *work)
 {
-	ui_led_set_pattern(UI_LED_ACTIVE_MODE);
+	led_set_pattern(LED_ACTIVE_MODE);
 }
 
 static void led_pat_passive_work_fn(struct k_work *work)
 {
-	ui_led_set_pattern(UI_LED_PASSIVE_MODE);
+	led_set_pattern(LED_PASSIVE_MODE);
 }
 
 static void led_pat_gps_work_fn(struct k_work *work)
 {
-	ui_led_set_pattern(UI_LED_GPS_SEARCHING);
+	led_set_pattern(LED_GPS_SEARCHING);
 }
 
 /* Message handler for SUB_STATE_GPS_ACTIVE in STATE_ACTIVE. */
 static void on_state_active_sub_state_gps_active(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_INACTIVE)) {
-		ui_led_set_pattern(UI_LED_ACTIVE_MODE);
+		led_set_pattern(LED_ACTIVE_MODE);
 		sub_state_set(SUB_STATE_GPS_INACTIVE);
 	}
 
 	if ((IS_EVENT(msg, data, DATA_EVT_DATA_SEND)) ||
 	    (IS_EVENT(msg, data, DATA_EVT_UI_DATA_SEND))) {
-		ui_led_set_pattern(UI_CLOUD_PUBLISHING);
+		led_set_pattern(LED_CLOUD_PUBLISHING);
 		k_delayed_work_submit(&led_pat_gps_work, K_SECONDS(5));
 	}
 
@@ -231,13 +231,13 @@ static void on_state_active_sub_state_gps_active(struct output_msg_data *msg)
 static void on_state_active_sub_state_gps_inactive(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_ACTIVE)) {
-		ui_led_set_pattern(UI_LED_GPS_SEARCHING);
+		led_set_pattern(LED_GPS_SEARCHING);
 		sub_state_set(SUB_STATE_GPS_ACTIVE);
 	}
 
 	if ((IS_EVENT(msg, data, DATA_EVT_DATA_SEND)) ||
 	    (IS_EVENT(msg, data, DATA_EVT_UI_DATA_SEND))) {
-		ui_led_set_pattern(UI_CLOUD_PUBLISHING);
+		led_set_pattern(LED_CLOUD_PUBLISHING);
 		k_delayed_work_submit(&led_pat_active_work, K_SECONDS(5));
 	}
 
@@ -254,13 +254,13 @@ static void on_state_active_sub_state_gps_inactive(struct output_msg_data *msg)
 static void on_state_passive_sub_state_gps_active(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_INACTIVE)) {
-		ui_led_set_pattern(UI_LED_PASSIVE_MODE);
+		led_set_pattern(LED_PASSIVE_MODE);
 		sub_state_set(SUB_STATE_GPS_INACTIVE);
 	}
 
 	if ((IS_EVENT(msg, data, DATA_EVT_DATA_SEND)) ||
 	    (IS_EVENT(msg, data, DATA_EVT_UI_DATA_SEND))) {
-		ui_led_set_pattern(UI_CLOUD_PUBLISHING);
+		led_set_pattern(LED_CLOUD_PUBLISHING);
 		k_delayed_work_submit(&led_pat_gps_work, K_SECONDS(5));
 	}
 
@@ -277,13 +277,13 @@ static void on_state_passive_sub_state_gps_active(struct output_msg_data *msg)
 static void on_state_passive_sub_state_gps_inactive(struct output_msg_data *msg)
 {
 	if (IS_EVENT(msg, gps, GPS_EVT_ACTIVE)) {
-		ui_led_set_pattern(UI_LED_GPS_SEARCHING);
+		led_set_pattern(LED_GPS_SEARCHING);
 		sub_state_set(SUB_STATE_GPS_ACTIVE);
 	}
 
 	if ((IS_EVENT(msg, data, DATA_EVT_DATA_SEND)) ||
 	    (IS_EVENT(msg, data, DATA_EVT_UI_DATA_SEND))) {
-		ui_led_set_pattern(UI_CLOUD_PUBLISHING);
+		led_set_pattern(LED_CLOUD_PUBLISHING);
 		k_delayed_work_submit(&led_pat_passive_work, K_SECONDS(5));
 	}
 
@@ -308,7 +308,7 @@ static void on_all_states(struct output_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, util, UTIL_EVT_SHUTDOWN_REQUEST)) {
-		ui_led_set_pattern(UI_LED_ERROR_SYSTEM_FAULT);
+		led_set_pattern(LED_ERROR_SYSTEM_FAULT);
 
 		state_set(STATE_ERROR);
 
@@ -316,7 +316,7 @@ static void on_all_states(struct output_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, modem, MODEM_EVT_LTE_CONNECTING)) {
-		ui_led_set_pattern(UI_LTE_CONNECTING);
+		led_set_pattern(LED_LTE_CONNECTING);
 	}
 
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {

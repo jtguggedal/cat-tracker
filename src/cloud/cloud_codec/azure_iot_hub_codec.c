@@ -696,7 +696,7 @@ int cloud_codec_encode_batch_data(
 	}
 
 	if (cJSON_GetArraySize(gps_obj) > 0) {
-		err += json_add_obj(root_obj, "gps", gps_obj);
+		err += json_add_obj(root_obj, DATA_GPS, gps_obj);
 		data_encoded = true;
 	} else {
 		cJSON_Delete(gps_obj);
@@ -712,7 +712,7 @@ int cloud_codec_encode_batch_data(
 	}
 
 	if (cJSON_GetArraySize(sensor_obj) > 0) {
-		err += json_add_obj(root_obj, "env", sensor_obj);
+		err += json_add_obj(root_obj, DATA_ENVIRONMENTALS, sensor_obj);
 		data_encoded = true;
 	} else {
 		cJSON_Delete(sensor_obj);
@@ -726,7 +726,7 @@ int cloud_codec_encode_batch_data(
 	}
 
 	if (cJSON_GetArraySize(ui_obj) > 0) {
-		err += json_add_obj(root_obj, "btn", ui_obj);
+		err += json_add_obj(root_obj, DATA_BUTTON, ui_obj);
 		data_encoded = true;
 	} else {
 		cJSON_Delete(ui_obj);
@@ -736,13 +736,13 @@ int cloud_codec_encode_batch_data(
 	for (int i = 0; i < accel_buf_count; i++) {
 		if (accel_buf[i].queued) {
 			err += accel_data_add(accel_obj,
-					     &accel_buf[i],
-					     true);
+					      &accel_buf[i],
+					      true);
 		}
 	}
 
 	if (cJSON_GetArraySize(accel_obj) > 0) {
-		err += json_add_obj(root_obj, "acc", accel_obj);
+		err += json_add_obj(root_obj, DATA_MOVEMENT, accel_obj);
 		data_encoded = true;
 	} else {
 		cJSON_Delete(accel_obj);
@@ -756,7 +756,7 @@ int cloud_codec_encode_batch_data(
 	}
 
 	if (cJSON_GetArraySize(bat_obj) > 0) {
-		err += json_add_obj(root_obj, "bat", bat_obj);
+		err += json_add_obj(root_obj, DATA_BATTERY, bat_obj);
 		data_encoded = true;
 	} else {
 		cJSON_Delete(bat_obj);
@@ -772,7 +772,7 @@ int cloud_codec_encode_batch_data(
 	}
 
 	if (cJSON_GetArraySize(modem_obj) > 0) {
-		err += json_add_obj(root_obj, "roam", modem_obj);
+		err += json_add_obj(root_obj, DATA_MODEM_DYNAMIC, modem_obj);
 		data_encoded = true;
 	} else {
 		cJSON_Delete(modem_obj);
@@ -788,7 +788,7 @@ int cloud_codec_encode_batch_data(
 	buffer = cJSON_PrintUnformatted(root_obj);
 
 	if (IS_ENABLED(CONFIG_CLOUD_CODEC_LOG_LEVEL_DBG)) {
-		json_print_obj("Encoded message:\n", root_obj);
+		json_print_obj("Encoded batch message:\n", root_obj);
 	}
 
 	output->buf = buffer;

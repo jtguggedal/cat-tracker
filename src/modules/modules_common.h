@@ -38,7 +38,11 @@ void module_set_queue(struct module_data *module,  struct k_msgq *msg_q);
 
 int module_get_next_msg(struct module_data *module, void *msg);
 
-void module_enqueue_msg(struct module_data *module, void *msg);
+/** @brief Enqueue message to a module's queue.
+ *
+ *  @return 0 if successful, otherwise a negative error code.
+ */
+int module_enqueue_msg(struct module_data *module, void *msg);
 
 void module_start(struct module_data *module);
 

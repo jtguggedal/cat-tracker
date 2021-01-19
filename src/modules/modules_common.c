@@ -40,13 +40,16 @@ int module_get_next_msg(struct module_data *module, void *msg)
 	return err;
 }
 
-void module_enqueue_msg(struct module_data *module, void *msg)
+int module_enqueue_msg(struct module_data *module, void *msg)
 {
-	while (k_msgq_put(module->msg_q, msg, K_NO_WAIT) != 0) {
-		/* Message queue is full: purge old data & try again */
-		k_msgq_purge(module->msg_q);
-		LOG_WRN("%s: Message queue full, queue purged",
-			log_strdup(module->name));
+	int err;
+
+	err = k_msgq_put(module->msg_q, msg, K_NO_WAIT);
+	if (err) {
+		LOG_WRN("%s: Message could not be enqueued, error code: %d",
+			log_strdup(module->name), err);
+
+		return err;
 	}
 
 	if (IS_ENABLED(CONFIG_MODULES_COMMON_LOG_LEVEL_DBG)) {
@@ -61,6 +64,8 @@ void module_enqueue_msg(struct module_data *module, void *msg)
 		LOG_DBG("%s module: Enqueued: %s", log_strdup(module->name),
 			log_strdup(buf));
 	}
+
+	return 0;
 }
 
 void module_start(struct module_data *module)

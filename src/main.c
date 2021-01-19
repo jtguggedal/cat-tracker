@@ -25,7 +25,6 @@
 #include "events/ui_module_event.h"
 #include "events/util_module_event.h"
 #include "events/modem_module_event.h"
-#include "events/output_module_event.h"
 
 #include <logging/log.h>
 #include <logging/log_ctrl.h>

@@ -43,8 +43,6 @@ static char *get_evt_type_str(enum app_module_event_type type)
 		return "APP_EVT_LTE_CONNECT";
 	case APP_EVT_LTE_DISCONNECT:
 		return "APP_EVT_LTE_DISCONNECT";
-	case APP_EVT_CONFIG_SEND:
-		return "APP_EVT_CONFIG_SEND";
 	case APP_EVT_SHUTDOWN_READY:
 		return "APP_EVT_SHUTDOWN_READY";
 	case APP_EVT_ERROR:

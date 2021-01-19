@@ -47,9 +47,6 @@ enum app_module_event_type {
 	/* Request latest configuration from the cloud. */
 	APP_EVT_CONFIG_GET,
 
-	/* Send the currently applied local configuration to cloud. */
-	APP_EVT_CONFIG_SEND,
-
 	/* The application module has performed all procedures to prepare for
 	 * a shutdown of the system.
 	 */

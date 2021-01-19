@@ -325,9 +325,6 @@ void on_sub_state_passive(struct app_msg_data *msg)
 		/* Keep a copy of the new configuration. */
 		app_cfg = msg->module.data.data.cfg;
 
-		/*Acknowledge configuration to cloud. */
-		SEND_EVENT(app, APP_EVT_CONFIG_SEND);
-
 		if (app_cfg.act) {
 			LOG_INF("Device mode: Active");
 			LOG_INF("Start data sample timer: %d seconds interval",
@@ -387,9 +384,6 @@ static void on_sub_state_active(struct app_msg_data *msg)
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
 		/* Keep a copy of the new configuration. */
 		app_cfg = msg->module.data.data.cfg;
-
-		/* Acknowledge configuration to cloud. */
-		SEND_EVENT(app, APP_EVT_CONFIG_SEND);
 
 		if (!app_cfg.act) {
 			LOG_INF("Device mode: Passive");

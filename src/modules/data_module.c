@@ -37,6 +37,11 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_DATA_MODULE_LOG_LEVEL);
 #define DEFAULT_GPS_TIMEOUT_SECONDS		60
 #define DEFAULT_DEVICE_MODE			true
 
+/* Value that is used to limit the maximum allowed device configuration value
+ * for the accelerometer threshold. 100 m/s2 ~ 10.2g.
+ */
+#define ACCELEROMETER_S_M2_MAX 100
+
 struct data_msg_data {
 	union {
 		struct modem_module_event modem;
@@ -573,11 +578,6 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 		return;
 	}
 
-	if (IS_EVENT(msg, app, APP_EVT_CONFIG_SEND)) {
-		config_send();
-		return;
-	}
-
 	if (IS_EVENT(msg, data, DATA_EVT_UI_DATA_READY)) {
 		data_ui_send();
 		return;
@@ -603,11 +603,8 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 
 		};
 
-		/* Only change values that are not 0 and have changed.
-		 * Since 0 is a valid value for the mode configuration we dont
-		 * include the 0 check. In general I think we should have
-		 * minimum allowed values so that extremely low configurations
-		 * dont suffocate the application.
+		/* Guards making sure that only valid configuration values are
+		 * applied.
 		 */
 		if (current_cfg.act != new.act) {
 			current_cfg.act = new.act;
@@ -617,58 +614,99 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 			} else {
 				LOG_WRN("New Device mode: Passive");
 			}
-
 			config_change = true;
 		}
 
-		if (current_cfg.actw != new.actw && new.actw != 0) {
-			current_cfg.actw = new.actw;
-			LOG_WRN("New Active timeout: %d", current_cfg.actw);
-
-			config_change = true;
-		}
-
-		if (current_cfg.pasw != new.pasw && new.pasw != 0) {
-			current_cfg.pasw = new.pasw;
-			LOG_WRN("New Movement resolution: %d",
-				current_cfg.pasw);
-
-			config_change = true;
-		}
-
-		if (current_cfg.movt != new.movt && new.movt != 0) {
-			current_cfg.movt = new.movt;
-			LOG_WRN("New Movement timeout: %d", current_cfg.movt);
-
-			config_change = true;
-		}
-
-		if (current_cfg.acct != new.acct && new.acct != 0) {
-			current_cfg.acct = new.acct;
-			LOG_WRN("New Movement threshold: %f",
-				current_cfg.acct);
-
-			config_change = true;
-		}
-
-		if (current_cfg.gpst != new.gpst && new.gpst != 0) {
-			current_cfg.gpst = new.gpst;
-			LOG_WRN("New GPS timeout: %d", current_cfg.gpst);
-
-			config_change = true;
-		}
-
-		if (config_change) {
-			err = save_config(&current_cfg,
-					  sizeof(current_cfg));
-			if (err) {
-				LOG_WRN("Configuration not stored, error: %d",
-					err);
+		if (new.gpst > 0) {
+			if (current_cfg.gpst != new.gpst) {
+				current_cfg.gpst = new.gpst;
+				LOG_WRN("New GPS timeout: %d",
+					current_cfg.gpst);
+				config_change = true;
 			}
-
-			config_distribute(DATA_EVT_CONFIG_READY);
 		} else {
-			LOG_DBG("No change in device configuration");
+			LOG_ERR("New GPS timeout out of range: %d",
+				new.gpst);
+		}
+
+		/* Only apply a new Active wait timeout or movement resolution
+		 * if the new corresponding values exceeds the current
+		 * GPS timeout value + 10 seconds. This is to hinder requesting
+		 * GPS data from the GPS module in the middle of a GPS search.
+		 */
+		if ((new.actw > current_cfg.gpst + 10) &&
+		    (new.actw > 0)) {
+			if (current_cfg.actw != new.actw) {
+				current_cfg.actw = new.actw;
+				LOG_WRN("New Active timeout: %d",
+					current_cfg.actw);
+				config_change = true;
+			}
+		} else {
+			LOG_ERR("New Active timeout out of range: %d",
+				new.actw);
+		}
+
+		if ((new.pasw > current_cfg.gpst + 10) &&
+		    (new.pasw > 0)) {
+			if (current_cfg.pasw != new.pasw) {
+				current_cfg.pasw = new.pasw;
+				LOG_WRN("New Movement resolution: %d",
+					current_cfg.pasw);
+				config_change = true;
+			}
+		} else {
+			LOG_ERR("New Movement resolution out of range: %d",
+				new.pasw);
+		}
+
+		if (new.movt > 0) {
+			if (current_cfg.movt != new.movt) {
+				current_cfg.movt = new.movt;
+				LOG_WRN("New Movement timeout: %d",
+					current_cfg.movt);
+				config_change = true;
+			}
+		} else {
+			LOG_ERR("New Movement timeout out of range: %d",
+				new.movt);
+		}
+
+		if ((new.acct < ACCELEROMETER_S_M2_MAX) &&
+		    (new.acct > 0)) {
+			if (current_cfg.acct != new.acct) {
+				current_cfg.acct = new.acct;
+				LOG_WRN("New Movement threshold: %f",
+					current_cfg.acct);
+				config_change = true;
+			}
+		} else {
+			LOG_ERR("New Movement threshold out of range: %f",
+				new.acct);
+		}
+
+		err = save_config(&current_cfg,
+					sizeof(current_cfg));
+		if (err) {
+			LOG_WRN("Configuration not stored, error: %d",
+				err);
+		}
+
+		/* Distribute the configuration to other modules regardless
+		 * if the values has changed or not. This is to make sure that
+		 * the cloud module (which does the initial decoding of the
+		 * incoming configuration) always has the latest valid
+		 * configuration.
+		 */
+		config_distribute(DATA_EVT_CONFIG_READY);
+
+		/* Acknowledge configuration to cloud if there has been a change
+		 * in the current device configuration.
+		 */
+		if (config_change) {
+			config_send();
+		} else {
+			LOG_WRN("No change in current device configuration");
 		}
 	}
 }

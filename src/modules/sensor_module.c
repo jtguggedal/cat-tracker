@@ -85,31 +85,37 @@ static void state_set(enum state_type new_state)
 /* Handlers */
 static bool event_handler(const struct event_header *eh)
 {
+	struct sensor_msg_data msg = {0};
+	bool enqueue_msg = false;
+
 	if (is_app_module_event(eh)) {
 		struct app_module_event *event = cast_app_module_event(eh);
-		struct sensor_msg_data sensor_msg = {
-			.module.app = *event
-		};
 
-		module_enqueue_msg(&self, &sensor_msg);
+		msg.module.app = *event;
+		enqueue_msg = true;
 	}
 
 	if (is_data_module_event(eh)) {
 		struct data_module_event *event = cast_data_module_event(eh);
-		struct sensor_msg_data sensor_msg = {
-			.module.data = *event
-		};
 
-		module_enqueue_msg(&self, &sensor_msg);
+		msg.module.data = *event;
+		enqueue_msg = true;
 	}
 
 	if (is_util_module_event(eh)) {
 		struct util_module_event *event = cast_util_module_event(eh);
-		struct sensor_msg_data sensor_msg = {
-			.module.util = *event
-		};
 
-		module_enqueue_msg(&self, &sensor_msg);
+		msg.module.util = *event;
+		enqueue_msg = true;
+	}
+
+	if (enqueue_msg) {
+		int err = module_enqueue_msg(&self, &msg);
+
+		if (err) {
+			LOG_ERR("Message could not be enqueued");
+			SEND_ERROR(sensor, SENSOR_EVT_ERROR, err);
+		}
 	}
 
 	return false;

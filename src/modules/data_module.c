@@ -165,77 +165,73 @@ static void state_set(enum state_type new_state)
 /* Handlers */
 static bool event_handler(const struct event_header *eh)
 {
+	struct data_msg_data msg = {0};
+	bool enqueue_msg = false;
+
 	if (is_modem_module_event(eh)) {
 		struct modem_module_event *event = cast_modem_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.modem = *event
-		};
 
-		module_enqueue_msg(&self, &data_msg);
+		msg.module.modem = *event;
+		enqueue_msg = true;
 	}
 
 	if (is_cloud_module_event(eh)) {
 		struct cloud_module_event *event = cast_cloud_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.cloud = *event
-		};
 
-		module_enqueue_msg(&self, &data_msg);
+		msg.module.cloud = *event;
+		enqueue_msg = true;
 	}
 
 	if (is_gps_module_event(eh)) {
 		struct gps_module_event *event = cast_gps_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.gps = *event
-		};
 
-		module_enqueue_msg(&self, &data_msg);
+		msg.module.gps = *event;
+		enqueue_msg = true;
 	}
 
 	if (is_sensor_module_event(eh)) {
 		struct sensor_module_event *event =
 				cast_sensor_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.sensor = *event
-		};
 
-		module_enqueue_msg(&self, &data_msg);
+		msg.module.sensor = *event;
+		enqueue_msg = true;
 	}
 
 	if (is_ui_module_event(eh)) {
 		struct ui_module_event *event = cast_ui_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.ui = *event
-		};
 
-		module_enqueue_msg(&self, &data_msg);
+		msg.module.ui = *event;
+		enqueue_msg = true;
 	}
 
 	if (is_app_module_event(eh)) {
 		struct app_module_event *event = cast_app_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.app = *event
-		};
 
-		module_enqueue_msg(&self, &data_msg);
+		msg.module.app = *event;
+		enqueue_msg = true;
 	}
 
 	if (is_data_module_event(eh)) {
 		struct data_module_event *event = cast_data_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.data = *event
-		};
 
-		module_enqueue_msg(&self, &data_msg);
+		msg.module.data = *event;
+		enqueue_msg = true;
 	}
 
 	if (is_util_module_event(eh)) {
 		struct util_module_event *event = cast_util_module_event(eh);
-		struct data_msg_data data_msg = {
-			.module.util = *event
-		};
 
-		module_enqueue_msg(&self, &data_msg);
+		msg.module.util = *event;
+		enqueue_msg = true;
+	}
+
+	if (enqueue_msg) {
+		int err = module_enqueue_msg(&self, &msg);
+
+		if (err) {
+			LOG_ERR("Message could not be enqueued");
+			SEND_ERROR(data, DATA_EVT_ERROR, err);
+		}
 	}
 
 	return false;

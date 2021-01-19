@@ -162,68 +162,65 @@ static void sub_state_set(enum sub_state_type new_state)
  */
 static bool event_handler(const struct event_header *eh)
 {
-	if (is_cloud_module_event(eh)) {
-		struct cloud_module_event *event = cast_cloud_module_event(eh);
-		struct app_msg_data app_msg = {
-			.module.cloud = *event
-		};
+	struct app_msg_data msg = {0};
+	bool enqueue_msg = false;
 
-		module_enqueue_msg(&self, &app_msg);
+	if (is_cloud_module_event(eh)) {
+		struct cloud_module_event *evt = cast_cloud_module_event(eh);
+
+		msg.module.cloud = *evt;
+		enqueue_msg = true;
 	}
 
 	if (is_app_module_event(eh)) {
-		struct app_module_event *event = cast_app_module_event(eh);
-		struct app_msg_data app_msg = {
-			.module.app = *event
-		};
+		struct app_module_event *evt = cast_app_module_event(eh);
 
-		module_enqueue_msg(&self, &app_msg);
+		msg.module.app = *evt;
+		enqueue_msg = true;
 	}
 
 	if (is_data_module_event(eh)) {
-		struct data_module_event *event = cast_data_module_event(eh);
-		struct app_msg_data app_msg = {
-			.module.data = *event
-		};
+		struct data_module_event *evt = cast_data_module_event(eh);
 
-		module_enqueue_msg(&self, &app_msg);
+		msg.module.data = *evt;
+		enqueue_msg = true;
 	}
 
 	if (is_sensor_module_event(eh)) {
-		struct sensor_module_event *event =
-				cast_sensor_module_event(eh);
-		struct app_msg_data app_msg = {
-			.module.sensor = *event
-		};
+		struct sensor_module_event *evt = cast_sensor_module_event(eh);
 
-		module_enqueue_msg(&self, &app_msg);
+		msg.module.sensor = *evt;
+		enqueue_msg = true;
 	}
 
 	if (is_util_module_event(eh)) {
-		struct util_module_event *event = cast_util_module_event(eh);
-		struct app_msg_data app_msg = {
-			.module.util = *event
-		};
+		struct util_module_event *evt = cast_util_module_event(eh);
 
-		module_enqueue_msg(&self, &app_msg);
+		msg.module.util = *evt;
+		enqueue_msg = true;
 	}
 
 	if (is_modem_module_event(eh)) {
-		struct modem_module_event *event = cast_modem_module_event(eh);
-		struct app_msg_data app_msg = {
-			.module.modem = *event
-		};
+		struct modem_module_event *evt = cast_modem_module_event(eh);
 
-		module_enqueue_msg(&self, &app_msg);
+		msg.module.modem = *evt;
+		enqueue_msg = true;
 	}
 
 	if (is_ui_module_event(eh)) {
-		struct ui_module_event *event = cast_ui_module_event(eh);
-		struct app_msg_data app_msg = {
-			.module.ui = *event
-		};
+		struct ui_module_event *evt = cast_ui_module_event(eh);
 
-		module_enqueue_msg(&self, &app_msg);
+		msg.module.ui = *evt;
+		enqueue_msg = true;
+	}
+
+	if (enqueue_msg) {
+		int err = module_enqueue_msg(&self, &msg);
+
+		if (err) {
+			LOG_ERR("Message could not be enqueued");
+			SEND_ERROR(app, APP_EVT_ERROR, err);
+		}
 	}
 
 	return false;

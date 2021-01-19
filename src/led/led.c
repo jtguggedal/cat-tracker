@@ -79,10 +79,8 @@ enum led_pattern led_get_pattern(void)
 	return current_led_state;
 }
 
-static int led_init(const struct device *dev)
+int led_init(void)
 {
-	ARG_UNUSED(dev);
-
 	int err = 0;
 
 #if defined(CONFIG_LED_USE_PWM)
@@ -117,5 +115,3 @@ void led_stop(void)
 	led_pwm_stop();
 #endif
 }
-
-SYS_INIT(led_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);

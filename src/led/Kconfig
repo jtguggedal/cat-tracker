@@ -6,7 +6,7 @@
 
 menuconfig LED_CONTROL
 	bool "LED control library"
-	select DK_LIBRARY
+	default y if UI_MODULE
 
 if LED_CONTROL
 

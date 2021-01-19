@@ -94,6 +94,13 @@ enum led_pattern {
 void led_set_pattern(enum led_pattern pattern);
 
 /**
+ * @brief Initialize LED library.
+ *
+ * @return 0 on success or negative error value on failure.
+ */
+int led_init(void);
+
+/**
  * @brief Gets the LED pattern.
  *
  * @return Current LED pattern.

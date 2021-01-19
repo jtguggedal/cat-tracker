@@ -15,11 +15,10 @@
 #include "events/cloud_module_event.h"
 #include "events/data_module_event.h"
 #include "events/sensor_module_event.h"
-#include "events/ui_module_event.h"
 #include "events/util_module_event.h"
 #include "events/gps_module_event.h"
 #include "events/modem_module_event.h"
-#include "events/output_module_event.h"
+#include "events/ui_module_event.h"
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_UTIL_MODULE_LOG_LEVEL);
@@ -33,7 +32,6 @@ struct util_msg_data {
 		struct app_module_event app;
 		struct gps_module_event gps;
 		struct modem_module_event modem;
-		struct output_module_event output;
 	} module;
 };
 
@@ -143,16 +141,6 @@ static bool event_handler(const struct event_header *eh)
 		struct data_module_event *event = cast_data_module_event(eh);
 		struct util_msg_data util_msg = {
 			.module.data = *event
-		};
-
-		message_handler(&util_msg);
-	}
-
-	if (is_output_module_event(eh)) {
-		struct output_module_event *event =
-				cast_output_module_event(eh);
-		struct util_msg_data util_msg = {
-			.module.output = *event
 		};
 
 		message_handler(&util_msg);
@@ -313,19 +301,6 @@ static void on_all_states(struct util_msg_data *msg)
 		}
 	}
 
-	if (is_output_module_event(&msg->module.output.header)) {
-		switch (msg->module.output.type) {
-		case OUTPUT_EVT_ERROR:
-			send_reboot_request();
-			break;
-		case OUTPUT_EVT_SHUTDOWN_READY:
-			reboot_ack_cnt++;
-			break;
-		default:
-			break;
-		}
-	}
-
 	/* Reboot if after a shorter timeout if all modules has acknowledged
 	 * that the application is ready to shutdown. This ensures a graceful
 	 * shutdown.
@@ -356,4 +331,3 @@ EVENT_SUBSCRIBE_EARLY(MODULE, gps_module_event);
 EVENT_SUBSCRIBE_EARLY(MODULE, ui_module_event);
 EVENT_SUBSCRIBE_EARLY(MODULE, sensor_module_event);
 EVENT_SUBSCRIBE_EARLY(MODULE, data_module_event);
-EVENT_SUBSCRIBE_EARLY(MODULE, output_module_event);

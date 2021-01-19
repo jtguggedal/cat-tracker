@@ -22,6 +22,6 @@ add_subdirectory(src/events)
 add_subdirectory(src/cloud/cloud_codec)
 
 add_subdirectory_ifdef(CONFIG_CLOUD_MODULE src/cloud)
-add_subdirectory_ifdef(CONFIG_OUTPUT_MODULE src/led)
+add_subdirectory_ifdef(CONFIG_UI_MODULE src/led)
 add_subdirectory_ifdef(CONFIG_SENSOR_MODULE src/ext_sensors)
 add_subdirectory_ifdef(CONFIG_WATCHDOG_APPLICATION src/watchdog)

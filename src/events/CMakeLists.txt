@@ -13,5 +13,4 @@ target_sources(app PRIVATE
 	       ${CMAKE_CURRENT_SOURCE_DIR}/sensor_module_event.c
 	       ${CMAKE_CURRENT_SOURCE_DIR}/ui_module_event.c
 	       ${CMAKE_CURRENT_SOURCE_DIR}/util_module_event.c
-	       ${CMAKE_CURRENT_SOURCE_DIR}/output_module_event.c
 )

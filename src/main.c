@@ -271,7 +271,7 @@ static void data_get_all(void)
 	/* Specify a timeout that each module has to fetch data. If data is not
 	 * fetched within this timeout, the data that is available is sent.
 	 */
-	app_module_event->timeout = app_cfg.gpst + 60;
+	app_module_event->timeout = app_cfg.gps_timeout + 60;
 
 	EVENT_SUBMIT(app_module_event);
 }
@@ -283,26 +283,26 @@ static void on_state_init(struct app_msg_data *msg)
 		/* Keep a copy of the new configuration. */
 		app_cfg = msg->module.data.data.cfg;
 
-		if (app_cfg.act) {
+		if (app_cfg.active_mode) {
 			LOG_INF("Device mode: Active");
 			LOG_INF("Start data sample timer: %d seconds interval",
-				app_cfg.actw);
+				app_cfg.active_wait_timeout);
 			k_timer_start(&data_sample_timer,
-				      K_SECONDS(app_cfg.actw),
-				      K_SECONDS(app_cfg.actw));
+				      K_SECONDS(app_cfg.active_wait_timeout),
+				      K_SECONDS(app_cfg.active_wait_timeout));
 		} else {
 			LOG_INF("Device mode: Passive");
 			LOG_INF("Start movement timeout: %d seconds interval",
-				app_cfg.movt);
+				app_cfg.movement_timeout);
 
 			k_timer_start(&movement_timeout_timer,
-				K_SECONDS(app_cfg.movt),
-				K_SECONDS(app_cfg.movt));
+				K_SECONDS(app_cfg.movement_timeout),
+				K_SECONDS(app_cfg.movement_timeout));
 		}
 
 		state_set(STATE_RUNNING);
-		sub_state_set(app_cfg.act ? SUB_STATE_ACTIVE_MODE :
-					    SUB_STATE_PASSIVE_MODE);
+		sub_state_set(app_cfg.active_mode ? SUB_STATE_ACTIVE_MODE :
+						    SUB_STATE_PASSIVE_MODE);
 	}
 }
 
@@ -325,13 +325,13 @@ void on_sub_state_passive(struct app_msg_data *msg)
 		/* Keep a copy of the new configuration. */
 		app_cfg = msg->module.data.data.cfg;
 
-		if (app_cfg.act) {
+		if (app_cfg.active_mode) {
 			LOG_INF("Device mode: Active");
 			LOG_INF("Start data sample timer: %d seconds interval",
-				app_cfg.actw);
+				app_cfg.active_wait_timeout);
 			k_timer_start(&data_sample_timer,
-				      K_SECONDS(app_cfg.actw),
-				      K_SECONDS(app_cfg.actw));
+				      K_SECONDS(app_cfg.active_wait_timeout),
+				      K_SECONDS(app_cfg.active_wait_timeout));
 			k_timer_stop(&movement_timeout_timer);
 			sub_state_set(SUB_STATE_ACTIVE_MODE);
 			return;
@@ -339,11 +339,11 @@ void on_sub_state_passive(struct app_msg_data *msg)
 
 		LOG_INF("Device mode: Passive");
 		LOG_INF("Start movement timeout: %d seconds interval",
-			app_cfg.movt);
+			app_cfg.movement_timeout);
 
 		k_timer_start(&movement_timeout_timer,
-			      K_SECONDS(app_cfg.movt),
-			      K_SECONDS(app_cfg.movt));
+			      K_SECONDS(app_cfg.movement_timeout),
+			      K_SECONDS(app_cfg.movement_timeout));
 		k_timer_stop(&data_sample_timer);
 	}
 
@@ -364,7 +364,7 @@ void on_sub_state_passive(struct app_msg_data *msg)
 			data_sample_timer_handler(NULL);
 
 			LOG_INF("%d seconds until movement can trigger",
-				app_cfg.pasw);
+				app_cfg.movement_resolution);
 			LOG_INF("a new data sample/publication");
 
 			/* Start one shot timer. After the timer has expired,
@@ -372,7 +372,7 @@ void on_sub_state_passive(struct app_msg_data *msg)
 			 * one shot timer.
 			 */
 			k_timer_start(&movement_resolution_timer,
-				      K_SECONDS(app_cfg.pasw),
+				      K_SECONDS(app_cfg.movement_resolution),
 				      K_SECONDS(0));
 		}
 	}
@@ -385,13 +385,13 @@ static void on_sub_state_active(struct app_msg_data *msg)
 		/* Keep a copy of the new configuration. */
 		app_cfg = msg->module.data.data.cfg;
 
-		if (!app_cfg.act) {
+		if (!app_cfg.active_mode) {
 			LOG_INF("Device mode: Passive");
 			LOG_INF("Start movement timeout: %d seconds interval",
-				app_cfg.movt);
+				app_cfg.movement_timeout);
 			k_timer_start(&movement_timeout_timer,
-				      K_SECONDS(app_cfg.movt),
-				      K_SECONDS(app_cfg.movt));
+				      K_SECONDS(app_cfg.movement_timeout),
+				      K_SECONDS(app_cfg.movement_timeout));
 			k_timer_stop(&data_sample_timer);
 			sub_state_set(SUB_STATE_PASSIVE_MODE);
 			return;
@@ -399,11 +399,11 @@ static void on_sub_state_active(struct app_msg_data *msg)
 
 		LOG_INF("Device mode: Active");
 		LOG_INF("Start data sample timer: %d seconds interval",
-			app_cfg.actw);
+			app_cfg.active_wait_timeout);
 
 		k_timer_start(&data_sample_timer,
-			      K_SECONDS(app_cfg.actw),
-			      K_SECONDS(app_cfg.actw));
+			      K_SECONDS(app_cfg.active_wait_timeout),
+			      K_SECONDS(app_cfg.active_wait_timeout));
 		k_timer_stop(&movement_timeout_timer);
 	}
 }

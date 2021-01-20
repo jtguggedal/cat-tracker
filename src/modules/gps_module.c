@@ -313,7 +313,7 @@ static int setup(void)
 static void on_state_init(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
-		gps_cfg.timeout = msg->module.data.data.cfg.gpst;
+		gps_cfg.timeout = msg->module.data.data.cfg.gps_timeout;
 		state_set(STATE_RUNNING);
 	}
 }
@@ -322,7 +322,7 @@ static void on_state_init(struct gps_msg_data *msg)
 static void on_state_running(struct gps_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
-		gps_cfg.timeout = msg->module.data.data.cfg.gpst;
+		gps_cfg.timeout = msg->module.data.data.cfg.gps_timeout;
 	}
 }
 

@@ -32,10 +32,10 @@ LOG_MODULE_REGISTER(cloud_codec, CONFIG_CLOUD_CODEC_LOG_LEVEL);
 
 #define CONFIG_DEVICE_MODE	"act"
 #define CONFIG_ACTIVE_TIMEOUT	"actwt"
-#define CONFIG_MOVEMENT_TIMEOUT "mvt"
-#define CONFIG_MOVEMENT_RES	"mvres"
+#define CONFIG_MOVE_TIMEOUT	"mvt"
+#define CONFIG_MOVE_RES		"mvres"
 #define CONFIG_GPS_TIMEOUT	"gpst"
-#define CONFIG_MOVEMENT_THRES	"acct"
+#define CONFIG_ACC_THRESHOLD	"acct"
 
 #define OBJECT_CONFIG		"cfg"
 #define OBJECT_REPORTED		"reported"
@@ -416,11 +416,11 @@ int cloud_codec_decode_config(char *input, struct cloud_data_cfg *data)
 	cJSON *root_obj = NULL;
 	cJSON *group_obj = NULL;
 	cJSON *subgroup_obj = NULL;
-	cJSON *gpst = NULL;
+	cJSON *gps_timeout = NULL;
 	cJSON *active = NULL;
 	cJSON *active_wait = NULL;
-	cJSON *passive_wait = NULL;
-	cJSON *movt = NULL;
+	cJSON *move_res = NULL;
+	cJSON *move_timeout = NULL;
 	cJSON *acc_thres = NULL;
 
 	if (input == NULL) {
@@ -456,35 +456,35 @@ int cloud_codec_decode_config(char *input, struct cloud_data_cfg *data)
 
 get_data:
 
-	gpst = cJSON_GetObjectItem(subgroup_obj, CONFIG_GPS_TIMEOUT);
+	gps_timeout = cJSON_GetObjectItem(subgroup_obj, CONFIG_GPS_TIMEOUT);
 	active = cJSON_GetObjectItem(subgroup_obj, CONFIG_DEVICE_MODE);
 	active_wait = cJSON_GetObjectItem(subgroup_obj, CONFIG_ACTIVE_TIMEOUT);
-	passive_wait = cJSON_GetObjectItem(subgroup_obj, CONFIG_MOVEMENT_RES);
-	movt = cJSON_GetObjectItem(subgroup_obj, CONFIG_MOVEMENT_TIMEOUT);
-	acc_thres = cJSON_GetObjectItem(subgroup_obj, CONFIG_MOVEMENT_THRES);
+	move_res = cJSON_GetObjectItem(subgroup_obj, CONFIG_MOVE_RES);
+	move_timeout = cJSON_GetObjectItem(subgroup_obj, CONFIG_MOVE_TIMEOUT);
+	acc_thres = cJSON_GetObjectItem(subgroup_obj, CONFIG_ACC_THRESHOLD);
 
-	if (gpst != NULL) {
-		data->gpst = gpst->valueint;
+	if (gps_timeout != NULL) {
+		data->gps_timeout = gps_timeout->valueint;
 	}
 
 	if (active != NULL) {
-		data->act = active->valueint;
+		data->active_mode = active->valueint;
 	}
 
 	if (active_wait != NULL) {
-		data->actw = active_wait->valueint;
+		data->active_wait_timeout = active_wait->valueint;
 	}
 
-	if (passive_wait != NULL) {
-		data->pasw = passive_wait->valueint;
+	if (move_res != NULL) {
+		data->movement_resolution = move_res->valueint;
 	}
 
-	if (movt != NULL) {
-		data->movt = movt->valueint;
+	if (move_timeout != NULL) {
+		data->movement_timeout = move_timeout->valueint;
 	}
 
 	if (acc_thres != NULL) {
-		data->acct = acc_thres->valuedouble;
+		data->accelerometer_threshold = acc_thres->valuedouble;
 	}
 
 exit:
@@ -507,12 +507,18 @@ int cloud_codec_encode_config(struct cloud_codec_data *output,
 		return -ENOMEM;
 	}
 
-	err += json_add_bool(cfg_obj, CONFIG_DEVICE_MODE, data->act);
-	err += json_add_number(cfg_obj, CONFIG_GPS_TIMEOUT, data->gpst);
-	err += json_add_number(cfg_obj, CONFIG_ACTIVE_TIMEOUT, data->actw);
-	err += json_add_number(cfg_obj, CONFIG_MOVEMENT_RES, data->pasw);
-	err += json_add_number(cfg_obj, CONFIG_MOVEMENT_TIMEOUT, data->movt);
-	err += json_add_number(cfg_obj, CONFIG_MOVEMENT_THRES, data->acct);
+	err += json_add_bool(cfg_obj, CONFIG_DEVICE_MODE,
+			     data->active_mode);
+	err += json_add_number(cfg_obj, CONFIG_GPS_TIMEOUT,
+			       data->gps_timeout);
+	err += json_add_number(cfg_obj, CONFIG_ACTIVE_TIMEOUT,
+			       data->active_wait_timeout);
+	err += json_add_number(cfg_obj, CONFIG_MOVE_RES,
+			       data->movement_resolution);
+	err += json_add_number(cfg_obj, CONFIG_MOVE_TIMEOUT,
+			       data->movement_timeout);
+	err += json_add_number(cfg_obj, CONFIG_ACC_THRESHOLD,
+			       data->accelerometer_threshold);
 
 	err += json_add_obj(root_obj, OBJECT_CONFIG, cfg_obj);
 

@@ -227,10 +227,11 @@ static void on_state_init(struct sensor_msg_data *msg)
 {
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
 #if defined(CONFIG_EXTERNAL_SENSORS)
-		double movement_threshold = msg->module.data.data.cfg.acct;
 		int err;
+		double accelerometer_threshold =
+			msg->module.data.data.cfg.accelerometer_threshold;
 
-		err = ext_sensors_mov_thres_set(movement_threshold);
+		err = ext_sensors_mov_thres_set(accelerometer_threshold);
 		if (err == -ENOTSUP) {
 			LOG_WRN("Passed in threshold value not valid");
 		} else if (err) {
@@ -248,10 +249,11 @@ static void on_state_running(struct sensor_msg_data *msg)
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
 
 #if defined(CONFIG_EXTERNAL_SENSORS)
-		int movement_threshold = msg->module.data.data.cfg.acct;
 		int err;
+		double accelerometer_threshold =
+			msg->module.data.data.cfg.accelerometer_threshold;
 
-		err = ext_sensors_mov_thres_set(movement_threshold);
+		err = ext_sensors_mov_thres_set(accelerometer_threshold);
 		if (err == -ENOTSUP) {
 			LOG_WRN("Passed in threshold value not valid");
 		} else if (err) {

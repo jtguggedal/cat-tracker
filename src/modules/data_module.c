@@ -31,7 +31,7 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_DATA_MODULE_LOG_LEVEL);
 
 /* Default device configuration values. */
 #define DEFAULT_ACTIVE_TIMEOUT_SECONDS		120
-#define DEFAULT_PASSIVE_TIMEOUT_SECONDS		120
+#define DEFAULT_MOVEMENT_RESOLUTION_SECONDS	120
 #define DEFAULT_MOVEMENT_TIMEOUT_SECONDS	3600
 #define DEFAULT_ACCELEROMETER_THRESHOLD		10
 #define DEFAULT_GPS_TIMEOUT_SECONDS		60
@@ -89,12 +89,12 @@ static int head_bat_buf;
 
 /* Default device configuration. */
 static struct cloud_data_cfg current_cfg = {
-	.gpst = DEFAULT_GPS_TIMEOUT_SECONDS,
-	.act  = DEFAULT_DEVICE_MODE,
-	.actw = DEFAULT_ACTIVE_TIMEOUT_SECONDS,
-	.pasw = DEFAULT_PASSIVE_TIMEOUT_SECONDS,
-	.movt = DEFAULT_MOVEMENT_TIMEOUT_SECONDS,
-	.acct = DEFAULT_ACCELEROMETER_THRESHOLD
+	.gps_timeout = DEFAULT_GPS_TIMEOUT_SECONDS,
+	.active_mode  = DEFAULT_DEVICE_MODE,
+	.active_wait_timeout = DEFAULT_ACTIVE_TIMEOUT_SECONDS,
+	.movement_resolution = DEFAULT_MOVEMENT_RESOLUTION_SECONDS,
+	.movement_timeout = DEFAULT_MOVEMENT_TIMEOUT_SECONDS,
+	.accelerometer_threshold = DEFAULT_ACCELEROMETER_THRESHOLD
 };
 
 static struct k_delayed_work data_send_work;
@@ -594,22 +594,27 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 		int err;
 		bool config_change = false;
 		struct cloud_data_cfg new = {
-			.act = msg->module.cloud.data.config.act,
-			.actw = msg->module.cloud.data.config.actw,
-			.pasw = msg->module.cloud.data.config.pasw,
-			.movt = msg->module.cloud.data.config.movt,
-			.gpst = msg->module.cloud.data.config.gpst,
-			.acct = msg->module.cloud.data.config.acct,
-
+		.active_mode =
+			msg->module.cloud.data.config.active_mode,
+		.active_wait_timeout =
+			msg->module.cloud.data.config.active_wait_timeout,
+		.movement_resolution =
+			msg->module.cloud.data.config.movement_resolution,
+		.movement_timeout =
+			msg->module.cloud.data.config.movement_timeout,
+		.gps_timeout =
+			msg->module.cloud.data.config.gps_timeout,
+		.accelerometer_threshold =
+			msg->module.cloud.data.config.accelerometer_threshold,
 		};
 
 		/* Guards making sure that only valid configuration values are
 		 * applied.
 		 */
-		if (current_cfg.act != new.act) {
-			current_cfg.act = new.act;
+		if (current_cfg.active_mode != new.active_mode) {
+			current_cfg.active_mode = new.active_mode;
 
-			if (current_cfg.act) {
+			if (current_cfg.active_mode) {
 				LOG_WRN("New Device mode: Active");
 			} else {
 				LOG_WRN("New Device mode: Passive");
@@ -617,16 +622,16 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 			config_change = true;
 		}
 
-		if (new.gpst > 0) {
-			if (current_cfg.gpst != new.gpst) {
-				current_cfg.gpst = new.gpst;
+		if (new.gps_timeout > 0) {
+			if (current_cfg.gps_timeout != new.gps_timeout) {
+				current_cfg.gps_timeout = new.gps_timeout;
 				LOG_WRN("New GPS timeout: %d",
-					current_cfg.gpst);
+					current_cfg.gps_timeout);
 				config_change = true;
 			}
 		} else {
 			LOG_ERR("New GPS timeout out of range: %d",
-				new.gpst);
+				new.gps_timeout);
 		}
 
 		/* Only apply a new Active wait timeout or movement resolution
@@ -634,55 +639,63 @@ static void on_cloud_state_connected(struct data_msg_data *msg)
 		 * GPS timeout value + 10 seconds. This is to hinder requesting
 		 * GPS data from the GPS module in the middle of a GPS search.
 		 */
-		if ((new.actw > current_cfg.gpst + 10) &&
-		    (new.actw > 0)) {
-			if (current_cfg.actw != new.actw) {
-				current_cfg.actw = new.actw;
-				LOG_WRN("New Active timeout: %d",
-					current_cfg.actw);
+		if ((new.active_wait_timeout > current_cfg.gps_timeout + 10) &&
+		    (new.active_wait_timeout > 0)) {
+			if (current_cfg.active_wait_timeout !=
+			    new.active_wait_timeout) {
+				current_cfg.active_wait_timeout =
+					new.active_wait_timeout;
+				LOG_WRN("New Active wait timeout: %d",
+					current_cfg.active_wait_timeout);
 				config_change = true;
 			}
 		} else {
 			LOG_ERR("New Active timeout out of range: %d",
-				new.actw);
+				new.active_wait_timeout);
 		}
 
-		if ((new.pasw > current_cfg.gpst + 10) &&
-		    (new.pasw > 0)) {
-			if (current_cfg.pasw != new.pasw) {
-				current_cfg.pasw = new.pasw;
+		if ((new.movement_resolution > current_cfg.gps_timeout + 10) &&
+		    (new.movement_resolution > 0)) {
+			if (current_cfg.movement_resolution !=
+			    new.movement_resolution) {
+				current_cfg.movement_resolution =
+					new.movement_resolution;
 				LOG_WRN("New Movement resolution: %d",
-					current_cfg.pasw);
+					current_cfg.movement_resolution);
 				config_change = true;
 			}
 		} else {
 			LOG_ERR("New Movement resolution out of range: %d",
-				new.pasw);
+				new.movement_resolution);
 		}
 
-		if (new.movt > 0) {
-			if (current_cfg.movt != new.movt) {
-				current_cfg.movt = new.movt;
+		if (new.movement_timeout > 0) {
+			if (current_cfg.movement_timeout !=
+			    new.movement_timeout) {
+				current_cfg.movement_timeout =
+					new.movement_timeout;
 				LOG_WRN("New Movement timeout: %d",
-					current_cfg.movt);
+					current_cfg.movement_timeout);
 				config_change = true;
 			}
 		} else {
 			LOG_ERR("New Movement timeout out of range: %d",
-				new.movt);
+				new.movement_timeout);
 		}
 
-		if ((new.acct < ACCELEROMETER_S_M2_MAX) &&
-		    (new.acct > 0)) {
-			if (current_cfg.acct != new.acct) {
-				current_cfg.acct = new.acct;
-				LOG_WRN("New Movement threshold: %f",
-					current_cfg.acct);
+		if ((new.accelerometer_threshold < ACCELEROMETER_S_M2_MAX) &&
+		    (new.accelerometer_threshold > 0)) {
+			if (current_cfg.accelerometer_threshold !=
+			    new.accelerometer_threshold) {
+				current_cfg.accelerometer_threshold =
+					new.accelerometer_threshold;
+				LOG_WRN("New Accelerometer threshold: %f",
+					current_cfg.accelerometer_threshold);
 				config_change = true;
 			}
 		} else {
-			LOG_ERR("New Movement threshold out of range: %f",
-				new.acct);
+			LOG_ERR("New Accelerometer threshold out of range: %f",
+				new.accelerometer_threshold);
 		}
 
 		err = save_config(&current_cfg,
@@ -841,7 +854,7 @@ static void on_all_states(struct data_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, sensor, SENSOR_EVT_MOVEMENT_DATA_READY)) {
-		if (current_cfg.act) {
+		if (current_cfg.active_mode) {
 			/* Do not store movement data in active mode. */
 			return;
 		}

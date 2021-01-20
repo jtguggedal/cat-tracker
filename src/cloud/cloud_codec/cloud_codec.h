@@ -60,18 +60,20 @@ struct cloud_data_gps {
 };
 
 struct cloud_data_cfg {
-	/** Device mode configurations. */
-	bool act;
+	/** Device mode. */
+	bool active_mode;
 	/** GPS search timeout. */
-	int gpst;
-	/** Time between cloud publications in active mode. */
-	int actw;
-	/** Time between cloud publications in passive mode. */
-	int pasw;
-	/** Time between cloud publications regardless of mode. */
-	int movt;
+	int gps_timeout;
+	/** Time between cloud publications in Active mode. */
+	int active_wait_timeout;
+	/** Time between cloud publications in Passive mode. */
+	int movement_resolution;
+	/** Time between cloud publications regardless of movement
+	 *  in Passive mode.
+	 */
+	int movement_timeout;
 	/** Accelerometer trigger threshold value in m/s2. */
-	double acct;
+	double accelerometer_threshold;
 };
 
 struct cloud_data_accelerometer {

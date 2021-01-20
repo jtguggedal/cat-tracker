@@ -7,8 +7,6 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(cloud_codec_ringbuffer, CONFIG_CLOUD_CODEC_LOG_LEVEL);
 
-#define ACCELEROMETER_TOTAL_AXIS 3
-
 void cloud_codec_populate_sensor_buffer(
 				struct cloud_data_sensors *sensor_buffer,
 				struct cloud_data_sensors *new_sensor_data,

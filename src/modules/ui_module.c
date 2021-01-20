@@ -279,7 +279,7 @@ static void on_state_active_sub_state_gps_active(struct ui_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
-		if (!msg->module.data.data.cfg.act) {
+		if (!msg->module.data.data.cfg.active_mode) {
 			state_set(STATE_PASSIVE);
 			k_delayed_work_submit(&led_pat_gps_work,
 					      K_SECONDS(5));
@@ -302,7 +302,7 @@ static void on_state_active_sub_state_gps_inactive(struct ui_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
-		if (!msg->module.data.data.cfg.act) {
+		if (!msg->module.data.data.cfg.active_mode) {
 			state_set(STATE_PASSIVE);
 			k_delayed_work_submit(&led_pat_passive_work,
 					      K_SECONDS(5));
@@ -325,7 +325,7 @@ static void on_state_passive_sub_state_gps_active(struct ui_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
-		if (msg->module.data.data.cfg.act) {
+		if (msg->module.data.data.cfg.active_mode) {
 			state_set(STATE_ACTIVE);
 			k_delayed_work_submit(&led_pat_gps_work,
 					      K_SECONDS(5));
@@ -348,7 +348,7 @@ static void on_state_passive_sub_state_gps_inactive(struct ui_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_READY)) {
-		if (msg->module.data.data.cfg.act) {
+		if (msg->module.data.data.cfg.active_mode) {
 			state_set(STATE_ACTIVE);
 			k_delayed_work_submit(&led_pat_active_work,
 					      K_SECONDS(5));
@@ -380,7 +380,7 @@ static void on_all_states(struct ui_msg_data *msg)
 	}
 
 	if (IS_EVENT(msg, data, DATA_EVT_CONFIG_INIT)) {
-		state_set(msg->module.data.data.cfg.act ?
+		state_set(msg->module.data.data.cfg.active_mode ?
 			 STATE_ACTIVE :
 			 STATE_PASSIVE);
 	}

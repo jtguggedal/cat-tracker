@@ -49,14 +49,21 @@ static struct modem_param_info modem_param;
 
 /* Value that always holds the latest RSRP value. */
 static uint16_t rsrp_value_latest;
+const k_tid_t module_thread;
+
+/* Modem module message queue. */
+#define MODEM_QUEUE_ENTRY_COUNT		10
+#define MODEM_QUEUE_BYTE_ALIGNMENT	4
+
+K_MSGQ_DEFINE(msgq_modem, sizeof(struct modem_msg_data),
+	      MODEM_QUEUE_ENTRY_COUNT, MODEM_QUEUE_BYTE_ALIGNMENT);
 
 static struct module_data self = {
 	.name = "modem",
-	.msg_q = NULL,
+	.msg_q = &msgq_modem,
 };
 
 /* Forward declarations. */
-static void message_handler(struct modem_msg_data *msg);
 static void send_cell_update(uint32_t cell_id, uint32_t tac);
 static void send_psm_update(int tau, int active_time);
 static void send_edrx_update(float edrx, float ptw);
@@ -95,40 +102,44 @@ static void state_set(enum state_type new_state)
 /* Handlers */
 static bool event_handler(const struct event_header *eh)
 {
-	if (is_modem_module_event(eh)) {
-		struct modem_module_event *event = cast_modem_module_event(eh);
-		struct modem_msg_data modem_msg = {
-			.module.modem = *event
-		};
+	struct modem_msg_data msg = {0};
+	bool enqueue_msg = false;
 
-		message_handler(&modem_msg);
+	if (is_modem_module_event(eh)) {
+		struct modem_module_event *evt = cast_modem_module_event(eh);
+
+		msg.module.modem = *evt;
+		enqueue_msg = true;
 	}
 
 	if (is_app_module_event(eh)) {
-		struct app_module_event *event = cast_app_module_event(eh);
-		struct modem_msg_data modem_msg = {
-			.module.app = *event
-		};
+		struct app_module_event *evt = cast_app_module_event(eh);
 
-		message_handler(&modem_msg);
+		msg.module.app = *evt;
+		enqueue_msg = true;
 	}
 
 	if (is_cloud_module_event(eh)) {
-		struct cloud_module_event *event = cast_cloud_module_event(eh);
-		struct modem_msg_data modem_msg = {
-			.module.cloud = *event
-		};
+		struct cloud_module_event *evt = cast_cloud_module_event(eh);
 
-		message_handler(&modem_msg);
+		msg.module.cloud = *evt;
+		enqueue_msg = true;
 	}
 
 	if (is_util_module_event(eh)) {
-		struct util_module_event *event = cast_util_module_event(eh);
-		struct modem_msg_data modem_msg = {
-			.module.util = *event
-		};
+		struct util_module_event *evt = cast_util_module_event(eh);
 
-		message_handler(&modem_msg);
+		msg.module.util = *evt;
+		enqueue_msg = true;
+	}
+
+	if (enqueue_msg) {
+		int err = module_enqueue_msg(&self, &msg);
+
+		if (err) {
+			LOG_ERR("Message could not be enqueued");
+			SEND_ERROR(modem, MODEM_EVT_ERROR, err);
+		}
 	}
 
 	return false;
@@ -474,7 +485,7 @@ static int modem_data_init(void)
 	return 0;
 }
 
-static int modem_setup(void)
+static int setup(void)
 {
 	int err;
 
@@ -549,16 +560,6 @@ static void on_all_states(struct modem_msg_data *msg)
 	if (IS_EVENT(msg, app, APP_EVT_START)) {
 		int err;
 
-		module_start(&self);
-		state_set(STATE_DISCONNECTED);
-
-		err = modem_setup();
-		if (err) {
-			LOG_ERR("Failed setting up the modem, error: %d", err);
-			SEND_ERROR(modem, MODEM_EVT_ERROR, err);
-			return;
-		}
-
 		err = lte_connect();
 		if (err) {
 			LOG_ERR("Failed connecting to LTE, error: %d", err);
@@ -612,28 +613,51 @@ static void on_all_states(struct modem_msg_data *msg)
 	}
 }
 
-static void message_handler(struct modem_msg_data *msg)
+static void module_thread_fn(void)
 {
-	switch (state) {
-	case STATE_DISCONNECTED:
-		on_state_disconnected(msg);
-		break;
-	case STATE_CONNECTING:
-		on_state_connecting(msg);
-		break;
-	case STATE_CONNECTED:
-		on_state_connected(msg);
-		break;
-	case STATE_SHUTTING_DOWN:
-		LOG_WRN("No action allowed in STATE_SHUTTING_DOWN");
-		break;
-	default:
-		LOG_WRN("Invalid state: %d", state);
-		break;
+	int err;
+	struct modem_msg_data msg;
+
+	self.thread_id = k_current_get();
+
+	module_start(&self);
+
+	state_set(STATE_DISCONNECTED);
+
+	err = setup();
+	if (err) {
+		LOG_ERR("Failed setting up the modem, error: %d", err);
+		SEND_ERROR(modem, MODEM_EVT_ERROR, err);
 	}
 
-	on_all_states(msg);
+	while (true) {
+		module_get_next_msg(&self, &msg);
+
+		switch (state) {
+		case STATE_DISCONNECTED:
+			on_state_disconnected(&msg);
+			break;
+		case STATE_CONNECTING:
+			on_state_connecting(&msg);
+			break;
+		case STATE_CONNECTED:
+			on_state_connected(&msg);
+			break;
+		case STATE_SHUTTING_DOWN:
+			LOG_WRN("No action allowed in STATE_SHUTTING_DOWN");
+			break;
+		default:
+			LOG_WRN("Invalid state: %d", state);
+			break;
+		}
+
+		on_all_states(&msg);
+	}
 }
+
+K_THREAD_DEFINE(module_thread, CONFIG_MODEM_THREAD_STACK_SIZE,
+		module_thread_fn, NULL, NULL, NULL,
+		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 
 EVENT_LISTENER(MODULE, event_handler);
 EVENT_SUBSCRIBE_EARLY(MODULE, modem_module_event);

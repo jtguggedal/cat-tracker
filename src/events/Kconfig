@@ -4,11 +4,11 @@
 # SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
 #
 
-if LOG
+menuconfig EVENTS
+	bool "Event options"
+	default y
 
-menu "Event options"
-
-comment "Initially logged events"
+if EVENTS
 
 config APP_EVENTS_LOG
 	bool "Enable logging for application module events"
@@ -42,7 +42,6 @@ config DATA_EVENTS_LOG
 	bool "Enable logging for data module events"
 	default y
 
-
 if PROFILER
 
 choice
@@ -59,6 +58,4 @@ endchoice
 
 endif # PROFILER
 
-endmenu
-
-endif
+endif # EVENTS

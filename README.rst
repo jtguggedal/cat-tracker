@@ -227,39 +227,37 @@ All module threads have the same properties by default:
 
 The basic structure of the threads are also the same and is shown below.
 
-<C-code block>
+.. code-block:: c
 
-static void module_thread_fn(void)
-{
-	struct module_specific msg;
+   static void module_thread_fn(void)
+   {
+           struct module_specific msg;
 
-	self.thread_id = k_current_get();
-	module_start(&self);
+           self.thread_id = k_current_get();
+           module_start(&self);
 
-	/* Module specific setup */
+           /* Module specific setup */
 
-	state_set(STATE_DISCONNECTED);
+           state_set(STATE_DISCONNECTED);
 
-	while (true) {
-		module_get_next_msg(&self, &msg);
+           while (true) {
+                   module_get_next_msg(&self, &msg);
 
-		switch (state) {
-		case STATE_DISCONNECTED:
-			on_tate_disconnected(msg);
-			break;
-		case STATE_CONNECTED:
-			on_state_connected(msg);
-			break;
-		default:
-			LOG_WRN("Unknown state");
-			break;
-		}
+                   switch (state) {
+                   case STATE_DISCONNECTED:
+                           on_tate_disconnected(msg);
+                           break;
+                   case STATE_CONNECTED:
+                           on_state_connected(msg);
+                           break;
+                   default:
+                           LOG_WRN("Unknown state");
+                           break;
+                   }
 
-		on_all_states(msg);
-	}
-}
-
-</ C-code block>
+                   on_all_states(msg);
+           }
+   }
 
 
 Memory allocation

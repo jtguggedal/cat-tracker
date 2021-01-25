@@ -560,7 +560,7 @@ static void on_all_states(struct cloud_msg_data *msg)
 	}
 }
 
-static void cloud_module(void)
+static void module_thread_fn(void)
 {
 	int err;
 	struct cloud_msg_data msg;
@@ -612,7 +612,7 @@ static void cloud_module(void)
 }
 
 K_THREAD_DEFINE(cloud_module_thread, CONFIG_CLOUD_THREAD_STACK_SIZE,
-		cloud_module, NULL, NULL, NULL,
+		module_thread_fn, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 
 EVENT_LISTENER(MODULE, event_handler);

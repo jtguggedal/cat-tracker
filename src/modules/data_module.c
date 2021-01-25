@@ -901,7 +901,7 @@ static void on_all_states(struct data_msg_data *msg)
 	}
 }
 
-static void data_module(void)
+static void module_thread_fn(void)
 {
 	int err;
 	struct data_msg_data msg;
@@ -940,7 +940,7 @@ static void data_module(void)
 }
 
 K_THREAD_DEFINE(data_module_thread, CONFIG_DATA_THREAD_STACK_SIZE,
-		data_module, NULL, NULL, NULL,
+		module_thread_fn, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 
 EVENT_LISTENER(MODULE, event_handler);

@@ -288,7 +288,7 @@ static void on_all_states(struct sensor_msg_data *msg)
 	}
 }
 
-static void sensor_module(void)
+static void module_thread_fn(void)
 {
 	int err;
 
@@ -326,7 +326,7 @@ static void sensor_module(void)
 }
 
 K_THREAD_DEFINE(sensor_module_thread, CONFIG_SENSOR_THREAD_STACK_SIZE,
-		sensor_module, NULL, NULL, NULL,
+		module_thread_fn, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 
 EVENT_LISTENER(MODULE, event_handler);

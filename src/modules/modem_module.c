@@ -655,7 +655,7 @@ static void module_thread_fn(void)
 	}
 }
 
-K_THREAD_DEFINE(module_thread, CONFIG_MODEM_THREAD_STACK_SIZE,
+K_THREAD_DEFINE(modem_module_thread, CONFIG_MODEM_THREAD_STACK_SIZE,
 		module_thread_fn, NULL, NULL, NULL,
 		K_LOWEST_APPLICATION_THREAD_PRIO, 0, 0);
 

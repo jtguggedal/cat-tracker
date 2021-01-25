@@ -334,6 +334,23 @@ This application supports the |NCS| :ref:`ug_bootloader`, but it is disabled by 
 To enable the immutable bootloader, set ``CONFIG_SECURE_BOOT=y``.
 
 
+Building with overlays
+======================
+
+It's possible to build the application with overlay files for both DTS and Kconfig to override the default values for the board.
+The application contains examples of both DTS and Kconfig overlays.
+DTS overlay files are named the same as the build target, and use the file extension ``.overlay``.
+When the DTS overlay filename matches the build target, the overlay is automatically picked up and applied by the build system.
+
+Kconfig overlays have a ``overlay-`` prefix and a ``.conf`` extension.
+To build with Kconfig overlay, it has to be bassed to the build system, for instance like this:
+
+    ``west build -b nrf9160dk_nrf9160ns -- -DOVERLAY_CONFIG=overlay-low-power.conf``
+
+The above command will build for nRF9160-DK and use the configurations found in ``overlay-low-power.conf`` in addition to the configurations found in ``prj_nrf9160dk_nrf9160ns.conf``.
+If some options are defined in both files, the options set in the overlay takes precedence.
+
+
 Testing
 =======
 

@@ -12,7 +12,7 @@ if CLOUD_MODULE
 
 config CLOUD_THREAD_STACK_SIZE
 	int "Cloud module thread stack size"
-	default 6000
+	default 2560
 
 config USE_CUSTOM_MQTT_CLIENT_ID
 	bool "Use custom MQTT client ID"

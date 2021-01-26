@@ -200,8 +200,9 @@ int cloud_wrap_init(cloud_wrap_evt_handler_t event_handler)
 	}
 
 	LOG_DBG("********************************************");
-	LOG_DBG(" The cat tracker has started");
-	LOG_DBG(" Version:     %s", log_strdup(CONFIG_CAT_TRACKER_APP_VERSION));
+	LOG_DBG(" The Asset Tracker v2 has started");
+	LOG_DBG(" Version:     %s",
+		log_strdup(CONFIG_ASSET_TRACKER_V2_APP_VERSION));
 	LOG_DBG(" Client ID:   %s", log_strdup(client_id_buf));
 	LOG_DBG(" Cloud:       %s", log_strdup("AWS IoT"));
 	LOG_DBG(" Endpoint:    %s",

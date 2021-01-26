@@ -297,7 +297,7 @@ static int static_modem_data_get(void)
 			new_modem_module_event();
 
 	modem_module_event->data.modem_static.app_version =
-			CONFIG_CAT_TRACKER_APP_VERSION;
+			CONFIG_ASSET_TRACKER_V2_APP_VERSION;
 
 	modem_module_event->data.modem_static.board_version =
 			modem_param.device.board;

@@ -6,7 +6,7 @@
 
 menu "Cat Tracker"
 
-config CAT_TRACKER_APP_VERSION
+config ASSET_TRACKER_V2_APP_VERSION
 	string "Cat Tracker application firmware version"
 	default "0.0.0-development"
 
